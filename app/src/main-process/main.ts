@@ -109,9 +109,10 @@ function getExtraErrorContext(): Record<string, string> {
 const protocolLauncherArg = '--protocol-launcher'
 
 const possibleProtocols = new Set(['x-github-client'])
-if (__DEV__) {
-  possibleProtocols.add('x-github-desktop-dev-auth')
-} else {
+// This fork is built without GitHub's own OAuth app, so sign in uses the
+// development OAuth app, which calls back on the dev scheme. Register both.
+possibleProtocols.add('x-github-desktop-dev-auth')
+if (!__DEV__) {
   possibleProtocols.add('x-github-desktop-auth')
 }
 // Also support Desktop Classic's protocols.

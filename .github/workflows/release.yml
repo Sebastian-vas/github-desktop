@@ -1,0 +1,164 @@
+name: Release
+
+# Builds GitHub Desktop (with the AI features) for Linux, Windows and macOS.
+#
+# - Pushing a tag like v3.4.14-linux1-ai1 builds everything and publishes a
+#   GitHub release with the installers. The app version is taken from the
+#   tag (without the "v").
+# - "Run workflow" in the Actions tab builds everything without publishing;
+#   the installers are attached to the run as artifacts.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: 20.17.0
+
+jobs:
+  linux:
+    name: Linux x64
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Set version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: node script/set-version-from-tag.js "${GITHUB_REF_NAME}"
+      # Builds inside an older Ubuntu container so the packages work on as
+      # many distributions as possible (same as upstream shiftkey/desktop).
+      - name: Build and package
+        uses: shiftkey/desktop-ubuntu-amd64-packaging@ea7b7a6a940a6b907b160b946439c5c7a516f9f1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-x64
+          path: |
+            dist/*.deb
+            dist/*.rpm
+            dist/*.AppImage
+          if-no-files-found: error
+
+  windows:
+    name: Windows x64
+    runs-on: windows-2022
+    timeout-minutes: 90
+    env:
+      DESKTOP_CUSTOM_BUILD: '1'
+      npm_config_arch: x64
+      TARGET_ARCH: x64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Set version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: node script/set-version-from-tag.js "${GITHUB_REF_NAME}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: yarn
+      - run: yarn
+      - run: yarn build:prod
+      - run: yarn package
+      - name: Collect installer
+        shell: bash
+        run: |
+          mkdir -p release
+          cp dist/installer/GitHubDesktopSetup-x64.exe release/GitHubDesktop-Windows-x64-Setup.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: release/*
+          if-no-files-found: error
+
+  macos:
+    name: macOS ${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            arch: arm64
+          - os: macos-15-intel
+            arch: x64
+    env:
+      DESKTOP_CUSTOM_BUILD: '1'
+      npm_config_arch: ${{ matrix.arch }}
+      TARGET_ARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Set version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: node script/set-version-from-tag.js "${GITHUB_REF_NAME}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: yarn
+      - run: yarn
+      - run: yarn build:prod
+      - run: yarn package
+      - name: Collect app
+        run: |
+          mkdir -p release
+          cp "dist/GitHub Desktop-${{ matrix.arch }}.zip" "release/GitHubDesktop-macOS-${{ matrix.arch }}.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}
+          path: release/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: [linux, windows, macos]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Checksums
+        working-directory: artifacts
+        run: sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: GitHub Desktop + AI ${{ github.ref_name }}
+          generate_release_notes: true
+          body: |
+            ## Installers
+
+            | System | File |
+            |---|---|
+            | Linux (Debian/Ubuntu/Mint) | `.deb` — `sudo apt install --reinstall ./GitHubDesktop-linux-amd64-*.deb` |
+            | Linux (Fedora/RHEL) | `.rpm` |
+            | Linux (any) | `.AppImage` |
+            | Windows | `GitHubDesktop-Windows-x64-Setup.exe` (SmartScreen: "More info" → "Run anyway") |
+            | macOS Apple Silicon | `GitHubDesktop-macOS-arm64.zip` |
+            | macOS Intel | `GitHubDesktop-macOS-x64.zip` |
+
+            **macOS:** unzip, move *GitHub Desktop* to Applications and run once
+            `xattr -cr "/Applications/GitHub Desktop.app"` (the app is not notarized by Apple).
+
+            Automatic updates are off in this build: new versions are published here.
+          files: artifacts/*
+          fail_on_unmatched_files: true

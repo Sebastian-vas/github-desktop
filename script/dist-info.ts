@@ -106,8 +106,15 @@ export function getBundleSizes() {
     mainBundleSize: Fs.statSync(Path.join(outPath, 'main.js')).size,
   }
 }
+/**
+ * Builds made by this fork's release workflow (DESKTOP_CUSTOM_BUILD=1) are not
+ * signed or notarized with GitHub's certificates, and don't build deltas
+ * against GitHub's official releases.
+ */
+export const isCustomBuild = () => process.env.DESKTOP_CUSTOM_BUILD === '1'
+
 export const isPublishable = () =>
-  ['production', 'beta', 'test'].includes(getChannel())
+  !isCustomBuild() && ['production', 'beta', 'test'].includes(getChannel())
 
 export const getChannel = () =>
   process.env.RELEASE_CHANNEL ?? process.env.NODE_ENV ?? 'development'
@@ -145,7 +152,7 @@ export function getUpdatesURL() {
 export function shouldMakeDelta() {
   // Only production and beta channels include deltas. Test releases aren't
   // necessarily sequential so deltas wouldn't make sense.
-  return ['production', 'beta'].includes(getChannel())
+  return !isCustomBuild() && ['production', 'beta'].includes(getChannel())
 }
 
 export function getIconFileName(): string {

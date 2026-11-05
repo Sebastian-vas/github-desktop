@@ -588,7 +588,15 @@ export class App extends React.Component<IAppProps, IAppState> {
     inBackground: boolean,
     skipGuidCheck: boolean = false
   ) {
-    if (__LINUX__ || __RELEASE_CHANNEL__ === 'development') {
+    // This is a custom build (AI features): GitHub's update server would
+    // replace it with the official app, so automatic updates are off. New
+    // versions are published as releases of this fork instead.
+    if (
+      __LINUX__ ||
+      __WIN32__ ||
+      __DARWIN__ ||
+      __RELEASE_CHANNEL__ === 'development'
+    ) {
       return
     }
 

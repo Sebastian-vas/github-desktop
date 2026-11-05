@@ -32,6 +32,7 @@ import {
   getDistRoot,
   getExecutableName,
   isPublishable,
+  isCustomBuild,
   getIconFileName,
   getDistArchitecture,
 } from './dist-info'
@@ -52,6 +53,9 @@ import { copySync } from 'fs-extra'
 
 const isPublishableBuild = isPublishable()
 const isDevelopmentBuild = getChannel() === 'development'
+// Development and custom builds get an ad-hoc signature on macOS (required to
+// run on Apple Silicon), since there's no signing certificate.
+const isAdHocSigned = isDevelopmentBuild || isCustomBuild()
 
 const projectRoot = path.join(__dirname, '..')
 const entitlementsSuffix = isDevelopmentBuild ? '-dev' : ''
@@ -202,17 +206,18 @@ function packageApp() {
       // will sign the app to run locally. We need to disable 'identity-validation'
       // or otherwise it will replace '-' with one of the regular codesigning
       // identities in our system.
-      identity: isDevelopmentBuild ? '-' : undefined,
-      identityValidation: !isDevelopmentBuild,
+      identity: isAdHocSigned ? '-' : undefined,
+      identityValidation: !isAdHocSigned,
     },
     osxNotarize,
     protocols: [
       {
         name: getBundleID(),
         schemes: [
-          !isDevelopmentBuild
-            ? 'x-github-desktop-auth'
-            : 'x-github-desktop-dev-auth',
+          'x-github-desktop-auth',
+          // Builds without GitHub's OAuth app use the development one, whose
+          // callback uses this scheme.
+          'x-github-desktop-dev-auth',
           'x-github-client',
           'github-mac',
         ],
