@@ -227,6 +227,9 @@ interface IChangesListProps {
 
   /** The repository's main (default) branch, if known */
   readonly mainBranchName: string | null
+
+  /** The production branch, when the repository has one */
+  readonly productionBranchName: string | null
 }
 
 interface IChangesState {
@@ -866,6 +869,7 @@ export class ChangesList extends React.Component<
         accounts={this.props.accounts}
         filesToCommit={filesSelected}
         mainBranchName={this.props.mainBranchName}
+        productionBranchName={this.props.productionBranchName}
       />
     )
   }

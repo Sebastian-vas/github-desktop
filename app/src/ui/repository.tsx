@@ -1,4 +1,6 @@
 import * as React from 'react'
+import { guessProductionBranch } from '../lib/git-flows/production-branch'
+import { BranchType } from '../models/branch'
 import { Repository } from '../models/repository'
 import { Commit, CommitOneLine } from '../models/commit'
 import { TipState } from '../models/tip'
@@ -239,6 +241,7 @@ export class RepositoryView extends React.Component<
           this.props.state.branchesState.defaultBranch?.nameWithoutRemote ??
           null
         }
+        productionBranchName={this.getProductionBranchName()}
         repository={this.props.repository}
         dispatcher={this.props.dispatcher}
         changes={this.props.state.changesState}
@@ -588,6 +591,19 @@ export class RepositoryView extends React.Component<
     } else {
       return assertNever(selectedSection, 'Unknown repository section')
     }
+  }
+
+  /** The production branch, when the repository seems to have one */
+  private getProductionBranchName() {
+    const { branchesState } = this.props.state
+    const remoteNames = branchesState.allBranches
+      .filter(b => b.type === BranchType.Remote)
+      .map(b => b.nameWithoutRemote)
+    return guessProductionBranch(
+      this.props.repository,
+      remoteNames,
+      branchesState.defaultBranch?.nameWithoutRemote ?? null
+    )
   }
 
   public render() {

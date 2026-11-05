@@ -113,3 +113,26 @@ export function hasSavedProductionBranch(repository: Repository) {
     return false
   }
 }
+
+/**
+ * Quick, synchronous guess of the production branch from the names of the
+ * remote branches Desktop already knows: the one chosen before, or a likely
+ * name. Used to decide whether to offer "Release to production" at all.
+ */
+export function guessProductionBranch(
+  repository: Repository,
+  remoteBranchNames: ReadonlyArray<string>,
+  main: string | null
+): string | null {
+  const candidates = remoteBranchNames.filter(b => b !== main)
+  let saved: string | null = null
+  try {
+    saved = localStorage.getItem(storageKey(repository))
+  } catch {
+    saved = null
+  }
+  if (saved !== null && candidates.includes(saved)) {
+    return saved
+  }
+  return LikelyProductionNames.find(n => candidates.includes(n)) ?? null
+}

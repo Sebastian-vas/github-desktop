@@ -188,6 +188,9 @@ interface ICommitMessageProps {
    * push" button is shown while on any other branch.
    */
   readonly mainBranchName?: string | null
+
+  /** The production branch; without one, there's no release button */
+  readonly productionBranchName?: string | null
 }
 
 interface ICommitMessageState {
@@ -1436,7 +1439,10 @@ export class CommitMessage extends React.Component<
 
   /** On the main branch, the flow button releases to production instead */
   private renderReleaseButton() {
-    const { isCommitting, anyFilesSelected } = this.props
+    const { isCommitting, anyFilesSelected, productionBranchName } = this.props
+    if (!productionBranchName) {
+      return null
+    }
     const needsSummary =
       anyFilesSelected && isEmptyOrWhitespace(this.state.summary)
     const disabled =
@@ -1459,8 +1465,8 @@ export class CommitMessage extends React.Component<
       >
         <Octicon symbol={octicons.rocket} />
         {anyFilesSelected
-          ? 'Commit & release to production'
-          : 'Release to production'}
+          ? `Commit & release to ${productionBranchName}`
+          : `Release to ${productionBranchName}`}
       </Button>
     )
   }

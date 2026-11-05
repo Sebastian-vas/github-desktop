@@ -546,13 +546,285 @@ dialog.git-flow-dialog {
   }
 }
 
-// The Flows button in the toolbar
+// The Flows dropdown in the toolbar
 .flows-toolbar-button {
-  width: auto;
-  min-width: 140px;
+  width: 190px;
   flex-shrink: 0;
 
-  .icon {
+  > .toolbar-dropdown > .toolbar-button > button > .icon,
+  .toolbar-button .icon {
     color: var(--link-button-color);
+  }
+}
+
+.flows-foldout {
+  display: flex;
+  flex-direction: column;
+  max-height: 100%;
+  min-height: 0;
+  height: 100%;
+
+  .flows-header {
+    padding: var(--spacing) var(--spacing-double);
+    border-bottom: var(--base-border);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--link-button-color) 14%, transparent), transparent 70%);
+
+    .flows-header-title {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing);
+      font-size: var(--font-size-md);
+      font-weight: var(--font-weight-semibold);
+
+      > .octicon {
+        color: var(--link-button-color);
+      }
+
+      > span {
+        flex: 1;
+      }
+    }
+
+    .flows-settings {
+      border: none;
+      background: transparent;
+      color: var(--text-secondary-color);
+      cursor: pointer;
+      padding: 2px;
+      border-radius: var(--border-radius);
+
+      &:hover {
+        color: var(--text-color);
+        background: var(--box-alt-background-color);
+      }
+    }
+  }
+
+  .flows-path {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--spacing-half);
+    margin-top: var(--spacing);
+
+    .flows-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 1px var(--spacing);
+      border: var(--base-border);
+      border-radius: 999px;
+      background: var(--background-color);
+      font-family: var(--font-family-monospace);
+      font-size: var(--font-size-sm);
+      max-width: 150px;
+      @include ellipsis;
+
+      .octicon {
+        flex-shrink: 0;
+        color: var(--text-secondary-color);
+      }
+
+      &.current {
+        border-color: color-mix(in srgb, var(--link-button-color) 50%, transparent);
+        font-weight: var(--font-weight-semibold);
+
+        .octicon {
+          color: var(--link-button-color);
+        }
+      }
+    }
+
+    .flows-arrow {
+      color: var(--text-secondary-color);
+      width: 12px;
+    }
+  }
+
+  .flows-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding-bottom: var(--spacing);
+  }
+
+  section {
+    padding: var(--spacing) var(--spacing) 0;
+
+    h3 {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 0 var(--spacing) var(--spacing-half);
+      font-size: 11px;
+      font-weight: var(--font-weight-semibold);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-secondary-color);
+    }
+  }
+
+  kbd {
+    margin-left: var(--spacing-half);
+    padding: 0 4px;
+    border: var(--base-border);
+    border-radius: 3px;
+    font-family: var(--font-family-monospace);
+    font-size: 10px;
+    font-weight: normal;
+    color: var(--text-secondary-color);
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  .flows-link {
+    border: none;
+    background: transparent;
+    color: var(--link-button-color);
+    cursor: pointer;
+    font-size: 11px;
+    text-transform: none;
+    letter-spacing: 0;
+    padding: 0;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .flow-action {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing);
+    width: 100%;
+    padding: var(--spacing-half) var(--spacing);
+    border: 1px solid transparent;
+    border-radius: var(--border-radius);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover:not(:disabled),
+    &:focus-visible {
+      background: var(--box-alt-background-color);
+      border-color: var(--box-border-color);
+    }
+
+    &:disabled {
+      cursor: default;
+
+      .flow-action-icon,
+      .flow-action-title {
+        opacity: 0.5;
+      }
+    }
+
+    .flow-action-icon {
+      flex: 0 0 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+
+      @each $tone, $color in (blue: var(--link-button-color), green: var(--color-new), purple: #8957e5, orange: var(--color-modified)) {
+        &.tone-#{$tone} {
+          color: $color;
+          background: color-mix(in srgb, #{$color} 15%, transparent);
+        }
+      }
+    }
+
+    .flow-action-text {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .flow-action-title {
+      display: flex;
+      align-items: center;
+      font-weight: var(--font-weight-semibold);
+      @include ellipsis;
+    }
+
+    .flow-action-description {
+      font-size: var(--font-size-sm);
+      color: var(--text-secondary-color);
+      @include ellipsis;
+    }
+  }
+
+  .flows-command-filter {
+    margin: 0 var(--spacing) var(--spacing-half);
+  }
+
+  .flows-commands {
+    max-height: 260px;
+    overflow-y: auto;
+  }
+
+  .flow-command {
+    display: grid;
+    grid-template-columns: 16px auto 1fr 16px;
+    align-items: center;
+    gap: var(--spacing-half);
+    width: 100%;
+    padding: 5px var(--spacing);
+    border: none;
+    border-radius: var(--border-radius);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+
+    > .octicon:first-child {
+      color: var(--link-button-color);
+    }
+
+    .flow-command-name {
+      font-family: var(--font-family-monospace);
+      font-weight: var(--font-weight-semibold);
+      white-space: nowrap;
+    }
+
+    .flow-command-description {
+      font-size: var(--font-size-sm);
+      color: var(--text-secondary-color);
+      min-width: 0;
+      @include ellipsis;
+    }
+
+    .flow-command-run {
+      color: var(--color-new);
+      opacity: 0;
+    }
+
+    &:hover,
+    &:focus-visible {
+      background: var(--box-alt-background-color);
+
+      .flow-command-run {
+        opacity: 1;
+      }
+    }
+  }
+
+  .flows-empty {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-half);
+    padding: var(--spacing-half) var(--spacing);
+    color: var(--text-secondary-color);
+    font-size: var(--font-size-sm);
   }
 }

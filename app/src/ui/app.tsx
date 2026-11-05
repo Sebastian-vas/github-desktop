@@ -38,6 +38,7 @@ import { PreferencesTab } from '../models/preferences'
 import { findItemByAccessKey, itemIsSelectable } from '../models/app-menu'
 import { Account } from '../models/account'
 import { TipState } from '../models/tip'
+import { BranchType } from '../models/branch'
 import { CloneRepositoryTab } from '../models/clone-repository-tab'
 import { CloningRepository } from '../models/cloning-repository'
 
@@ -55,8 +56,8 @@ import {
   PushPullButton,
   BranchDropdown,
   RevertProgress,
-  ToolbarButton,
 } from './toolbar'
+import { FlowsDropdown } from './toolbar/flows-dropdown'
 import { iconForRepository, OcticonSymbol } from './octicons'
 import * as octicons from './octicons/octicons.generated'
 import {
@@ -79,8 +80,7 @@ import { AIReviewDialog } from './ai-review/ai-review-dialog'
 import { RepoCommandsDialog } from './repo-commands/repo-commands-dialog'
 import { getAISettings } from '../lib/ai/settings'
 import { DiffSelectionType } from '../models/diff'
-import { getRepositoryCommands } from '../lib/repo-commands'
-import { IMenuItem } from '../lib/menu-item'
+import { guessProductionBranch } from '../lib/git-flows/production-branch'
 import { ConfirmRestart } from './preferences/confirm-restart'
 import { RepositorySettings } from './repository-settings'
 import { AppError } from './app-error'
@@ -1092,73 +1092,47 @@ export class App extends React.Component<IAppProps, IAppState> {
     })
   }
 
-  private onFlowsButtonClick = async () => {
-    const context = this.getFlowContext()
-    if (context === null) {
-      return
-    }
-    const { branch, main } = context
-    const onMain = branch !== null && branch === main
-    const commands = await getRepositoryCommands(context.repository.path)
-
-    const commandItems: IMenuItem[] = [
-      ...commands.slice(0, 25).map(c => ({
-        label: `/${c.name}`,
-        action: () => this.showRepoCommands(c.name),
-      })),
-      { type: 'separator' },
-      { label: 'All commands…', action: () => this.showRepoCommands() },
-    ]
-
-    const items: IMenuItem[] = [
-      {
-        label: 'Pull without losing changes',
-        action: this.showSafePull,
-        enabled: branch !== null,
-      },
-      {
-        label: `Commit, merge into ${main ?? 'main'} & push…`,
-        action: this.showCommitMergeMain,
-        enabled: !onMain && main !== null,
-      },
-      {
-        label: 'Release to production…',
-        action: this.showReleaseToProduction,
-        enabled: onMain,
-      },
-      { type: 'separator' },
-      {
-        label: 'Review changes with AI',
-        action: this.showAIReview,
-        enabled: context.selectedFiles.length > 0,
-      },
-      { type: 'separator' },
-      commands.length > 0
-        ? {
-            label: `Repository commands (${commands.length})`,
-            submenu: commandItems,
-          }
-        : {
-            label: 'Repository commands…',
-            action: () => this.showRepoCommands(),
-          },
-    ]
-
-    showContextualMenu(items)
+  private showAIFlowsSettings = () => {
+    this.props.dispatcher.showPopup({
+      type: PopupType.Preferences,
+      initialSelectedTab: PreferencesTab.AI,
+    })
   }
 
   private renderFlowsToolbarButton() {
-    if (this.getFlowContext() === null) {
+    const context = this.getFlowContext()
+    const state = this.state.selectedState
+    if (
+      context === null ||
+      state == null ||
+      state.type !== SelectionType.Repository
+    ) {
       return null
     }
+
+    const { branchesState } = state.state
+    const productionBranch = guessProductionBranch(
+      context.repository,
+      branchesState.allBranches
+        .filter(b => b.type === BranchType.Remote)
+        .map(b => b.nameWithoutRemote),
+      context.main
+    )
+
     return (
-      <ToolbarButton
-        className="flows-toolbar-button"
-        title="Flows"
-        description="Team workflows & AI"
-        icon={octicons.workflow}
-        onClick={this.onFlowsButtonClick}
-        tooltip="Pull safely, merge into main, release to production, review with AI and run the repository's Claude Code commands"
+      <FlowsDropdown
+        repository={context.repository}
+        branch={context.branch}
+        mainBranch={context.main}
+        productionBranch={productionBranch}
+        selectedFilesCount={context.selectedFiles.length}
+        aiEnabled={getAISettings().enabled}
+        onSafePull={this.showSafePull}
+        onCommitMergeMain={this.showCommitMergeMain}
+        onReleaseToProduction={this.showReleaseToProduction}
+        onReviewWithAI={this.showAIReview}
+        onRunCommand={this.showRepoCommands}
+        onOpenSettings={this.showAIFlowsSettings}
       />
     )
   }
