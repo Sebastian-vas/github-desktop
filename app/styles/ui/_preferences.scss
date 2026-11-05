@@ -254,3 +254,16 @@
     width: 100px;
   }
 }
+
+#preferences .ai-account-status {
+  margin-top: var(--spacing);
+
+  p {
+    margin: 0 0 var(--spacing-half) 0;
+  }
+
+  .ai-account-error {
+    color: var(--error-color);
+    white-space: pre-wrap;
+  }
+}

@@ -3,20 +3,58 @@ import { DialogContent } from '../dialog'
 import { Checkbox, CheckboxValue } from '../lib/checkbox'
 import { TextBox } from '../lib/text-box'
 import { Select } from '../lib/select'
-import { AIModelId, AIModels, AIOutputLanguage } from '../../lib/ai/types'
+import { RadioGroup } from '../lib/radio-group'
+import { Button } from '../lib/button'
+import { LinkButton } from '../lib/link-button'
+import {
+  AIModelId,
+  AIModels,
+  AIOutputLanguage,
+  AIProvider,
+  IClaudeAccountStatus,
+} from '../../lib/ai/types'
+import { invoke } from '../../lib/ipc-renderer'
 
 interface IAIPreferencesProps {
   readonly enabled: boolean
+  readonly provider: AIProvider
   readonly apiKey: string
   readonly model: AIModelId
   readonly language: AIOutputLanguage
   readonly onEnabledChanged: (enabled: boolean) => void
+  readonly onProviderChanged: (provider: AIProvider) => void
   readonly onApiKeyChanged: (apiKey: string) => void
   readonly onModelChanged: (model: AIModelId) => void
   readonly onLanguageChanged: (language: AIOutputLanguage) => void
 }
 
-export class AI extends React.Component<IAIPreferencesProps> {
+interface IAIPreferencesState {
+  /** null while checking */
+  readonly accountStatus: IClaudeAccountStatus | null
+  readonly isSigningIn: boolean
+}
+
+const providers: ReadonlyArray<AIProvider> = ['claude-account', 'api-key']
+
+export class AI extends React.Component<
+  IAIPreferencesProps,
+  IAIPreferencesState
+> {
+  private unmounted = false
+
+  public constructor(props: IAIPreferencesProps) {
+    super(props)
+    this.state = { accountStatus: null, isSigningIn: false }
+  }
+
+  public componentDidMount() {
+    this.refreshAccountStatus()
+  }
+
+  public componentWillUnmount() {
+    this.unmounted = true
+  }
+
   public render() {
     const disabled = !this.props.enabled
 
@@ -32,28 +70,27 @@ export class AI extends React.Component<IAIPreferencesProps> {
           />
           <p id="ai-enabled-description" className="git-settings-description">
             Adds "Resolve with AI" to the merge conflicts dialog and "Generate
-            with AI" to the commit form. When you use them, the conflicted file
-            or the diff of the selected changes is sent to the Anthropic API.
-            Nothing is applied or committed until you accept it.
+            with AI" to the commit form. When you use them, the conflicts or the
+            diff of the selected changes are sent to Claude. Nothing is applied
+            or committed until you accept it.
           </p>
         </div>
 
         <div className="advanced-section">
-          <h2>Anthropic API</h2>
-          <TextBox
-            label="API key"
-            type="password"
-            value={this.props.apiKey}
-            placeholder="sk-ant-…"
-            disabled={disabled}
-            onValueChanged={this.props.onApiKeyChanged}
-            ariaDescribedBy="ai-api-key-description"
+          <h2 id="ai-provider-heading">Connect with</h2>
+          <RadioGroup<AIProvider>
+            ariaLabelledBy="ai-provider-heading"
+            selectedKey={this.props.provider}
+            radioButtonKeys={providers}
+            onSelectionChanged={this.props.onProviderChanged}
+            renderRadioButtonLabelContents={this.renderProviderLabel}
           />
-          <p id="ai-api-key-description" className="git-settings-description">
-            Stored in your system keychain. If left empty, the ANTHROPIC_API_KEY
-            environment variable is used.
-          </p>
+          {this.props.provider === 'claude-account'
+            ? this.renderAccount()
+            : this.renderApiKey(disabled)}
+        </div>
 
+        <div className="advanced-section">
           <Select
             label="Model"
             value={this.props.model}
@@ -79,6 +116,111 @@ export class AI extends React.Component<IAIPreferencesProps> {
         </div>
       </DialogContent>
     )
+  }
+
+  private renderProviderLabel = (provider: AIProvider) =>
+    provider === 'claude-account'
+      ? 'My Claude account (uses my Claude plan)'
+      : 'Anthropic API key (pay per use)'
+
+  private renderAccount() {
+    const { accountStatus, isSigningIn } = this.state
+
+    let status: JSX.Element
+    if (isSigningIn) {
+      status = (
+        <p>
+          Finish signing in in your browser. This window updates when you're
+          done.
+        </p>
+      )
+    } else if (accountStatus === null) {
+      status = <p>Checking your Claude account…</p>
+    } else if (accountStatus.kind === 'not-installed') {
+      status = (
+        <p>
+          Connecting your account requires Claude Code.{' '}
+          <LinkButton uri="https://claude.com/claude-code">
+            Install Claude Code
+          </LinkButton>
+          , then come back here.{' '}
+          <LinkButton onClick={this.refreshAccountStatus}>
+            Check again
+          </LinkButton>
+        </p>
+      )
+    } else if (accountStatus.kind === 'logged-out') {
+      status = (
+        <>
+          <p>Not signed in.</p>
+          <Button onClick={this.onSignIn}>Sign in to Claude…</Button>
+        </>
+      )
+    } else if (accountStatus.kind === 'logged-in') {
+      const plan =
+        accountStatus.plan !== null ? ` (${accountStatus.plan} plan)` : ''
+      status = (
+        <p>
+          ✓ Connected as{' '}
+          <strong>{accountStatus.email ?? 'your account'}</strong>
+          {plan}.{' '}
+          <LinkButton onClick={this.refreshAccountStatus}>Refresh</LinkButton>
+        </p>
+      )
+    } else {
+      status = (
+        <>
+          <p className="ai-account-error">{accountStatus.message}</p>
+          <Button onClick={this.onSignIn}>Try again</Button>
+        </>
+      )
+    }
+
+    return (
+      <div className="ai-account-status">
+        {status}
+        <p className="git-settings-description">
+          Uses the Claude account you're signed in to in Claude Code, so
+          requests count towards your Claude plan instead of API billing.
+        </p>
+      </div>
+    )
+  }
+
+  private renderApiKey(disabled: boolean) {
+    return (
+      <>
+        <TextBox
+          label="API key"
+          type="password"
+          value={this.props.apiKey}
+          placeholder="sk-ant-…"
+          disabled={disabled}
+          onValueChanged={this.props.onApiKeyChanged}
+          ariaDescribedBy="ai-api-key-description"
+        />
+        <p id="ai-api-key-description" className="git-settings-description">
+          Stored in your system keychain. If left empty, the ANTHROPIC_API_KEY
+          environment variable is used.
+        </p>
+      </>
+    )
+  }
+
+  private refreshAccountStatus = async () => {
+    this.setState({ accountStatus: null })
+    const accountStatus = await invoke('ai-claude-account-status')
+    if (!this.unmounted) {
+      this.setState({ accountStatus })
+    }
+  }
+
+  private onSignIn = async () => {
+    this.setState({ isSigningIn: true })
+    const accountStatus = await invoke('ai-claude-account-login')
+    if (!this.unmounted) {
+      this.setState({ isSigningIn: false, accountStatus })
+    }
   }
 
   private onEnabledChanged = (event: React.FormEvent<HTMLInputElement>) => {

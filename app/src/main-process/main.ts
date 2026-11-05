@@ -56,6 +56,7 @@ import { initializeDesktopNotifications } from './notifications'
 import parseCommandLineArgs from 'minimist'
 import { CLIAction } from '../lib/cli-action'
 import { generateCommitMessageWithAI, resolveConflictWithAI } from './ai'
+import { getClaudeAccountStatus, loginToClaudeAccount } from './claude-code'
 
 app.setAppLogsPath()
 enableSourceMaps()
@@ -541,6 +542,12 @@ app.on('ready', () => {
   ipcMain.handle('ai-resolve-conflict', async (_, request) =>
     resolveConflictWithAI(request)
   )
+
+  ipcMain.handle('ai-claude-account-status', async () =>
+    getClaudeAccountStatus()
+  )
+
+  ipcMain.handle('ai-claude-account-login', async () => loginToClaudeAccount())
 
   ipcMain.handle('ai-generate-commit-message', async (_, request) =>
     generateCommitMessageWithAI(request)

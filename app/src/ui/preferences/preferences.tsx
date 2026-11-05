@@ -49,7 +49,7 @@ import {
   isValidCustomIntegration,
 } from '../../lib/custom-integration'
 import { AI } from './ai'
-import { AIModelId, AIOutputLanguage } from '../../lib/ai/types'
+import { AIModelId, AIOutputLanguage, AIProvider } from '../../lib/ai/types'
 import {
   getAIApiKey,
   getAISettings,
@@ -147,6 +147,7 @@ interface IPreferencesState {
 
   readonly canFilterChanges: boolean
   readonly aiEnabled: boolean
+  readonly aiProvider: AIProvider
   readonly aiApiKey: string
   readonly initialAIApiKey: string
   readonly aiModel: AIModelId
@@ -215,6 +216,7 @@ export class Preferences extends React.Component<
       aiApiKey: '',
       initialAIApiKey: '',
       aiEnabled: aiSettings.enabled,
+      aiProvider: aiSettings.provider,
       aiModel: aiSettings.model,
       aiLanguage: aiSettings.language,
     }
@@ -585,6 +587,8 @@ export class Preferences extends React.Component<
         View = (
           <AI
             enabled={this.state.aiEnabled}
+            provider={this.state.aiProvider}
+            onProviderChanged={this.onAIProviderChanged}
             apiKey={this.state.aiApiKey}
             model={this.state.aiModel}
             language={this.state.aiLanguage}
@@ -612,6 +616,10 @@ export class Preferences extends React.Component<
 
   private onAIEnabledChanged = (aiEnabled: boolean) => {
     this.setState({ aiEnabled })
+  }
+
+  private onAIProviderChanged = (aiProvider: AIProvider) => {
+    this.setState({ aiProvider })
   }
 
   private onAIApiKeyChanged = (aiApiKey: string) => {
@@ -840,6 +848,7 @@ export class Preferences extends React.Component<
 
     setAISettings({
       enabled: this.state.aiEnabled,
+      provider: this.state.aiProvider,
       model: this.state.aiModel,
       language: this.state.aiLanguage,
     })

@@ -30,7 +30,9 @@ import { PathText } from '../../lib/path-text'
 import {
   applyAIConflictResolution,
   getAISettings,
+  AIResult,
   IAIConflictResolution,
+  prefetchAIConflictResolutions,
   proposeAIConflictResolution,
 } from '../../../lib/ai'
 
@@ -87,6 +89,12 @@ export class ConflictsDialog extends React.Component<
   IConflictsDialogState
 > {
   private unmounted = false
+
+  /** Proposals being prepared ahead of time by "Resolve all with AI" */
+  private aiPrefetch = new Map<
+    string,
+    Promise<AIResult<IAIConflictResolution>>
+  >()
 
   public constructor(props: IConflictsDialogProps) {
     super(props)
@@ -206,7 +214,15 @@ export class ConflictsDialog extends React.Component<
   }
 
   private onResolveAllWithAI = () => {
-    const [first, ...rest] = this.getFilesResolvableWithAI()
+    const paths = this.getFilesResolvableWithAI()
+    // Prepare every file in parallel; the user reviews them one by one.
+    this.aiPrefetch = prefetchAIConflictResolutions(
+      this.props.repository,
+      paths,
+      this.props.ourBranch,
+      this.props.theirBranch
+    )
+    const [first, ...rest] = paths
     if (first !== undefined) {
       this.requestAIProposal(first, rest)
     }
@@ -220,18 +236,22 @@ export class ConflictsDialog extends React.Component<
       aiProposal: null,
     })
 
-    const result = await proposeAIConflictResolution(
-      this.props.repository,
-      path,
-      this.props.ourBranch,
-      this.props.theirBranch
-    )
+    const prefetched = this.aiPrefetch.get(path)
+    this.aiPrefetch.delete(path)
+    const result = await (prefetched ??
+      proposeAIConflictResolution(
+        this.props.repository,
+        path,
+        this.props.ourBranch,
+        this.props.theirBranch
+      ))
 
     if (this.unmounted) {
       return
     }
 
     if (result.kind === 'error') {
+      this.aiPrefetch.clear()
       this.setState({
         aiResolvingPath: null,
         aiQueue: [],
@@ -295,6 +315,7 @@ export class ConflictsDialog extends React.Component<
   }
 
   private onCancelAIQueue = () => {
+    this.aiPrefetch.clear()
     this.setState({ aiQueue: [], aiProposal: null })
   }
 

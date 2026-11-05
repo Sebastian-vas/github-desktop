@@ -5,13 +5,16 @@ import {
   AIModelId,
   AIModels,
   AIOutputLanguage,
+  AIProvider,
   DefaultAIModel,
+  DefaultAIProvider,
   IAIRequestOptions,
 } from './types'
 
 const enabledKey = 'ai-features-enabled'
 const modelKey = 'ai-model'
 const languageKey = 'ai-output-language'
+const providerKey = 'ai-provider'
 
 /** The keychain entry the Anthropic API key is stored under */
 const apiKeyKeychainService = getKeyForEndpoint('https://api.anthropic.com')
@@ -19,6 +22,7 @@ const apiKeyKeychainLogin = 'anthropic-api-key'
 
 export interface IAISettings {
   readonly enabled: boolean
+  readonly provider: AIProvider
   readonly model: AIModelId
   readonly language: AIOutputLanguage
 }
@@ -30,9 +34,14 @@ function isAIModelId(value: string | null): value is AIModelId {
 export function getAISettings(): IAISettings {
   const model = localStorage.getItem(modelKey)
   const language = localStorage.getItem(languageKey)
+  const provider = localStorage.getItem(providerKey)
 
   return {
     enabled: getBoolean(enabledKey, false),
+    provider:
+      provider === 'api-key' || provider === 'claude-account'
+        ? provider
+        : DefaultAIProvider,
     model: isAIModelId(model) ? model : DefaultAIModel,
     language: language === 'es' ? 'es' : 'en',
   }
@@ -40,6 +49,7 @@ export function getAISettings(): IAISettings {
 
 export function setAISettings(settings: IAISettings) {
   setBoolean(enabledKey, settings.enabled)
+  localStorage.setItem(providerKey, settings.provider)
   localStorage.setItem(modelKey, settings.model)
   localStorage.setItem(languageKey, settings.language)
 }
@@ -69,6 +79,11 @@ export async function setAIApiKey(apiKey: string) {
 }
 
 export async function getAIRequestOptions(): Promise<IAIRequestOptions> {
-  const { model, language } = getAISettings()
-  return { apiKey: await getAIApiKey(), model, language }
+  const { provider, model, language } = getAISettings()
+  return {
+    provider,
+    apiKey: provider === 'api-key' ? await getAIApiKey() : null,
+    model,
+    language,
+  }
 }

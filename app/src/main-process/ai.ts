@@ -5,10 +5,11 @@ import {
   AIResult,
   IAICommitMessage,
   IAICommitMessageRequest,
-  IAIConflictResolution,
   IAIConflictResolutionRequest,
+  IAIHunkResolutions,
   IAIRequestOptions,
 } from '../lib/ai/types'
+import { requestStructuredOutputViaClaudeCode } from './claude-code'
 
 /**
  * Models that support the server-side refusal fallback. When one of these
@@ -28,15 +29,26 @@ const languageNames: Record<AIOutputLanguage, string> = {
 const conflictResolutionSchema = {
   type: 'object',
   properties: {
-    resolved_contents: {
-      type: 'string',
-      description:
-        'The complete final contents of the file with every conflict resolved and no conflict markers.',
-    },
-    explanation: {
-      type: 'string',
-      description:
-        'A short explanation, one bullet per conflict, of how it was resolved and why.',
+    resolutions: {
+      type: 'array',
+      description: 'One entry per conflict hunk, in the order received.',
+      items: {
+        type: 'object',
+        properties: {
+          index: { type: 'integer', description: 'The hunk index.' },
+          resolved: {
+            type: 'string',
+            description:
+              'The text that replaces the whole conflict region (from the <<<<<<< line to the >>>>>>> line, inclusive). No conflict markers. Empty string if the region should disappear.',
+          },
+          explanation: {
+            type: 'string',
+            description: 'One short sentence on how and why.',
+          },
+        },
+        required: ['index', 'resolved', 'explanation'],
+        additionalProperties: false,
+      },
     },
     confidence: {
       type: 'string',
@@ -45,7 +57,7 @@ const conflictResolutionSchema = {
         'low if the intent of either side was unclear and the resolution involved guessing.',
     },
   },
-  required: ['resolved_contents', 'explanation', 'confidence'],
+  required: ['resolutions', 'confidence'],
   additionalProperties: false,
 }
 
@@ -62,15 +74,15 @@ const commitMessageSchema = {
 function conflictSystemPrompt(language: AIOutputLanguage) {
   return `You resolve Git merge conflicts inside GitHub Desktop. The user will review your proposal before it is written to disk.
 
-You receive a file that contains conflict regions delimited by "<<<<<<<", "=======" (and possibly "|||||||" for the base) and ">>>>>>>" markers. The "ours" side is the branch being merged into, the "theirs" side is the branch being merged in. When provided, the merge base version shows what the file looked like before either side changed it, so you can tell what each side intended to change.
+You receive the conflict hunks of one file. For each hunk you get the lines right before and after it, the "ours" side (the branch being merged into), the "theirs" side (the branch being merged in) and, when available, the merge base version, which shows what the code looked like before either side changed it. Sometimes you also get the whole file for context.
 
-Produce the complete final file:
-- Resolve every conflict region. Where both sides made compatible changes, combine them so that both intents are preserved. Where they are genuinely incompatible, pick the side that best keeps the code correct and consistent with the rest of the file, and say so in the explanation.
-- Keep everything outside the conflict regions exactly as it is, including whitespace, indentation and line endings.
-- The result must not contain any conflict markers and must be valid for the file's language (balanced brackets, no duplicated declarations or imports).
-- Do not add comments to the file about the merge.
+For every hunk, write the text that replaces the whole conflict region:
+- Where both sides made compatible changes, combine them so that both intents are preserved. Where they are genuinely incompatible, pick the side that best keeps the code correct and consistent with the surrounding code.
+- Keep the indentation and style of the surrounding code. Don't repeat the context lines before or after the hunk; they stay in the file as they are.
+- The result must not contain conflict markers and must leave the file valid (balanced brackets, no duplicated declarations or imports).
+- Do not add comments about the merge.
 
-Write the explanation in ${languageNames[language]}, as a short bullet list ("- ") with one bullet per conflict region. Set confidence to "low" if you had to guess at either side's intent, "medium" if the resolution is plausible but should be checked carefully, and "high" only when the resolution is unambiguous.`
+Return exactly one resolution per hunk index. Write each explanation in ${languageNames[language]}, as one short sentence. Set confidence to "low" if you had to guess at either side's intent, "medium" if the resolution is plausible but should be checked carefully, and "high" only when every resolution is unambiguous.`
 }
 
 function commitSystemPrompt(language: AIOutputLanguage) {
@@ -80,6 +92,7 @@ function commitSystemPrompt(language: AIOutputLanguage) {
 - description: explain what changed and why, as far as the diff shows it. Use short paragraphs or a "- " bullet list, wrapping lines at 72 characters. Use an empty string when the change is trivial and the summary says it all.
 - Describe only what the diff supports. Do not invent motivations, issue numbers or test results.
 - If the user already started a summary, treat it as a strong hint about their intent.
+- Large change sets are abbreviated: you get the list of every changed file with its added/removed line counts, and the diff of some files may be cut short or left out. Use the file list to describe the change as a whole, and focus the description on the most significant changes.
 
 Write both fields in ${languageNames[language]}.`
 }
@@ -103,6 +116,16 @@ async function requestStructuredOutput(
   schema: Record<string, unknown>,
   effort: 'low' | 'medium' | 'high'
 ): Promise<unknown> {
+  if (options.provider === 'claude-account') {
+    return requestStructuredOutputViaClaudeCode(
+      options.model,
+      system,
+      userContent,
+      schema,
+      effort
+    )
+  }
+
   const client = createClient(options.apiKey)
   // If the model declines (safety classifiers), let the API retry the request
   // on a fallback model within the same call.
@@ -172,31 +195,46 @@ function describeError(e: unknown): string {
   }
   if (e instanceof Anthropic.AnthropicError) {
     // Most commonly: no API key configured anywhere.
-    return `${e.message} Configure an API key in Options > AI.`
+    return `${e.message} Configure an API key or sign in with your Claude account in Options > AI.`
   }
   return e instanceof Error ? e.message : String(e)
 }
 
 export async function resolveConflictWithAI(
   request: IAIConflictResolutionRequest
-): Promise<AIResult<IAIConflictResolution>> {
+): Promise<AIResult<IAIHunkResolutions>> {
   const ours = request.ourBranch ?? 'the current branch'
   const theirs = request.theirBranch ?? 'the branch being merged'
 
-  const base =
-    request.baseContents === null
-      ? 'The file did not exist in the merge base (it was added on both sides).'
-      : `<merge_base>\n${request.baseContents}\n</merge_base>`
+  const file =
+    request.fileContents === null
+      ? ''
+      : `<whole_file>\n${request.fileContents}\n</whole_file>\n\n`
+
+  const hunks = request.hunks
+    .map(
+      h => `<hunk index="${h.index}">
+<before>
+${h.before}
+</before>
+<ours>
+${h.ours}
+</ours>
+${h.base === null ? '' : `<base>\n${h.base}\n</base>\n`}<theirs>
+${h.theirs}
+</theirs>
+<after>
+${h.after}
+</after>
+</hunk>`
+    )
+    .join('\n\n')
 
   const userContent = `File: ${request.path}
 "Ours" branch: ${ours}
 "Theirs" branch: ${theirs}
 
-${base}
-
-<conflicted_file>
-${request.conflictedContents}
-</conflicted_file>`
+${file}${hunks}`
 
   try {
     const result = (await requestStructuredOutput(
@@ -204,21 +242,10 @@ ${request.conflictedContents}
       conflictSystemPrompt(request.language),
       userContent,
       conflictResolutionSchema,
-      'high'
-    )) as {
-      resolved_contents: string
-      explanation: string
-      confidence: IAIConflictResolution['confidence']
-    }
+      'medium'
+    )) as IAIHunkResolutions
 
-    return {
-      kind: 'success',
-      value: {
-        resolvedContents: result.resolved_contents,
-        explanation: result.explanation,
-        confidence: result.confidence,
-      },
-    }
+    return { kind: 'success', value: result }
   } catch (e) {
     log.error('AI: conflict resolution failed', e)
     return { kind: 'error', message: describeError(e) }

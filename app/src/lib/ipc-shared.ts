@@ -22,7 +22,8 @@ import {
   AIResult,
   IAICommitMessage,
   IAICommitMessageRequest,
-  IAIConflictResolution,
+  IAIHunkResolutions,
+  IClaudeAccountStatus,
   IAIConflictResolutionRequest,
 } from './ai/types'
 
@@ -146,8 +147,10 @@ export type RequestResponseChannels = {
   'request-notifications-permission': () => Promise<boolean>
   'ai-resolve-conflict': (
     request: IAIConflictResolutionRequest
-  ) => Promise<AIResult<IAIConflictResolution>>
+  ) => Promise<AIResult<IAIHunkResolutions>>
   'ai-generate-commit-message': (
     request: IAICommitMessageRequest
   ) => Promise<AIResult<IAICommitMessage>>
+  'ai-claude-account-status': () => Promise<IClaudeAccountStatus>
+  'ai-claude-account-login': () => Promise<IClaudeAccountStatus>
 }
