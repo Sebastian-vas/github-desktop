@@ -126,3 +126,103 @@ dialog#conflicts-dialog {
     }
   }
 }
+
+// AI assisted conflict resolution
+dialog#conflicts-dialog {
+  &.showing-ai-proposal {
+    width: 720px;
+    max-width: calc(100vw - var(--spacing-double) * 2);
+  }
+
+  .resolve-all-with-ai {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--spacing-half) var(--spacing);
+    margin-bottom: var(--spacing-double);
+
+    .octicon {
+      margin-right: var(--spacing-half);
+      vertical-align: text-bottom;
+    }
+
+    .ai-hint {
+      color: var(--text-secondary-color);
+      font-size: var(--font-size-sm);
+    }
+  }
+
+  .resolve-with-ai-button .octicon {
+    margin-right: var(--spacing-half);
+  }
+
+  .ai-conflict-proposal {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+
+    h3 {
+      font-size: var(--font-size);
+      font-weight: var(--font-weight-semibold);
+      margin: var(--spacing-double) 0 var(--spacing-half);
+    }
+
+    .ai-proposal-header {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing);
+      min-width: 0;
+
+      .path-text-component {
+        flex: 1 1 auto;
+        min-width: 0;
+        font-weight: var(--font-weight-semibold);
+      }
+    }
+
+    .ai-confidence {
+      flex-shrink: 0;
+      font-size: var(--font-size-sm);
+      padding: 0 var(--spacing-half);
+      border-radius: var(--border-radius);
+      border: var(--base-border);
+
+      &.ai-confidence-high {
+        color: var(--color-new);
+      }
+
+      &.ai-confidence-medium {
+        color: var(--color-modified);
+      }
+
+      &.ai-confidence-low {
+        color: var(--color-deleted);
+      }
+    }
+
+    .ai-queue-status {
+      margin-top: var(--spacing-half);
+      color: var(--text-secondary-color);
+      font-size: var(--font-size-sm);
+    }
+
+    .ai-explanation {
+      white-space: pre-wrap;
+      user-select: text;
+    }
+
+    .ai-resolved-contents {
+      margin: 0;
+      max-height: 320px;
+      overflow: auto;
+      padding: var(--spacing);
+      border: var(--base-border);
+      border-radius: var(--border-radius);
+      background: var(--box-alt-background-color);
+      font-family: var(--font-family-monospace);
+      font-size: var(--font-size-sm);
+      white-space: pre;
+      user-select: text;
+    }
+  }
+}

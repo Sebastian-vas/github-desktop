@@ -18,6 +18,13 @@ import { DesktopNotificationPermission } from 'desktop-notifications/dist/notifi
 import { NotificationCallback } from 'desktop-notifications/dist/notification-callback'
 import { DesktopAliveEvent } from './stores/alive-store'
 import { CLIAction } from './cli-action'
+import {
+  AIResult,
+  IAICommitMessage,
+  IAICommitMessageRequest,
+  IAIConflictResolution,
+  IAIConflictResolutionRequest,
+} from './ai/types'
 
 /**
  * Defines the simplex IPC channel names we use from the renderer
@@ -137,4 +144,10 @@ export type RequestResponseChannels = {
   ) => Promise<string | null>
   'get-notifications-permission': () => Promise<DesktopNotificationPermission>
   'request-notifications-permission': () => Promise<boolean>
+  'ai-resolve-conflict': (
+    request: IAIConflictResolutionRequest
+  ) => Promise<AIResult<IAIConflictResolution>>
+  'ai-generate-commit-message': (
+    request: IAICommitMessageRequest
+  ) => Promise<AIResult<IAICommitMessage>>
 }

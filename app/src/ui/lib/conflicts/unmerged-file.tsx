@@ -78,6 +78,15 @@ export const renderUnmergedFile: React.FunctionComponent<{
   readonly setIsFileResolutionOptionsMenuOpen: (
     isFileResolutionOptionsMenuOpen: boolean
   ) => void
+  /**
+   * When provided, a "Resolve with AI" button is rendered for files with
+   * conflict markers.
+   */
+  readonly onResolveWithAI?: (path: string) => void
+  /** Whether an AI resolution is currently being requested for this file */
+  readonly isResolvingWithAI?: boolean
+  /** Whether any AI request is in flight (disables the AI buttons) */
+  readonly isAIBusy?: boolean
 }> = props => {
   if (
     isConflictWithMarkers(props.status) &&
@@ -96,6 +105,12 @@ export const renderUnmergedFile: React.FunctionComponent<{
       isFileResolutionOptionsMenuOpen: props.isFileResolutionOptionsMenuOpen,
       setIsFileResolutionOptionsMenuOpen:
         props.setIsFileResolutionOptionsMenuOpen,
+      onResolveWithAI:
+        props.onResolveWithAI !== undefined
+          ? () => props.onResolveWithAI?.(props.path)
+          : undefined,
+      isResolvingWithAI: props.isResolvingWithAI === true,
+      isAIBusy: props.isAIBusy === true,
     })
   }
   if (
@@ -246,6 +261,9 @@ const renderConflictedFileWithConflictMarkers: React.FunctionComponent<{
   readonly setIsFileResolutionOptionsMenuOpen: (
     isFileResolutionOptionsMenuOpen: boolean
   ) => void
+  readonly onResolveWithAI?: () => void
+  readonly isResolvingWithAI: boolean
+  readonly isAIBusy: boolean
 }> = props => {
   const humanReadableConflicts = calculateConflicts(
     props.status.conflictMarkerCount
@@ -274,6 +292,17 @@ const renderConflictedFileWithConflictMarkers: React.FunctionComponent<{
         <div className="file-conflicts-status">{message}</div>
       </div>
       <div className="action-buttons">
+        {props.onResolveWithAI !== undefined && (
+          <Button
+            onClick={props.onResolveWithAI}
+            disabled={props.isAIBusy}
+            className="small-button button-group-item resolve-with-ai-button"
+            tooltip="Ask Claude to propose a resolution for this file"
+          >
+            <Octicon symbol={octicons.sparkleFill} />
+            {props.isResolvingWithAI ? 'Resolving…' : 'Resolve with AI'}
+          </Button>
+        )}
         <Button
           onClick={props.onOpenEditorClick}
           disabled={disabled}

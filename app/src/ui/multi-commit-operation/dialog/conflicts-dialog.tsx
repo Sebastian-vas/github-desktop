@@ -1,16 +1,18 @@
 import * as React from 'react'
-import { Dialog, DialogContent, DialogFooter } from '../../dialog'
+import { Dialog, DialogContent, DialogError, DialogFooter } from '../../dialog'
 import { Dispatcher } from '../../dispatcher'
 import { Repository } from '../../../models/repository'
 import {
   WorkingDirectoryStatus,
   WorkingDirectoryFileChange,
+  isConflictWithMarkers,
 } from '../../../models/status'
 import {
   isConflictedFile,
   getResolvedFiles,
   getConflictedFiles,
   getUnmergedFiles,
+  hasUnresolvedConflicts,
 } from '../../../lib/status'
 import {
   renderUnmergedFile,
@@ -21,6 +23,16 @@ import {
 import { ManualConflictResolution } from '../../../models/manual-conflict-resolution'
 import { OkCancelButtonGroup } from '../../dialog/ok-cancel-button-group'
 import { DialogSuccess } from '../../dialog/success'
+import { LinkButton } from '../../lib/link-button'
+import { Octicon } from '../../octicons'
+import * as octicons from '../../octicons/octicons.generated'
+import { PathText } from '../../lib/path-text'
+import {
+  applyAIConflictResolution,
+  getAISettings,
+  IAIConflictResolution,
+  proposeAIConflictResolution,
+} from '../../../lib/ai'
 
 interface IConflictsDialogProps {
   readonly dispatcher: Dispatcher
@@ -43,11 +55,26 @@ interface IConflictsDialogProps {
   readonly someConflictsHaveBeenResolved?: () => void
 }
 
+/** A resolution proposed by the AI, waiting for the user to accept it */
+interface IAIProposal {
+  readonly path: string
+  readonly resolution: IAIConflictResolution
+}
+
 interface IConflictsDialogState {
   readonly isCommitting: boolean
   readonly isAborting: boolean
   readonly isFileResolutionOptionsMenuOpen: boolean
   readonly countResolved: number | null
+
+  /** Path of the file Claude is currently resolving, if any */
+  readonly aiResolvingPath: string | null
+  /** The proposal being previewed, if any */
+  readonly aiProposal: IAIProposal | null
+  /** Files still to be resolved when using "Resolve all with AI" */
+  readonly aiQueue: ReadonlyArray<string>
+  readonly aiError: string | null
+  readonly isApplyingAIProposal: boolean
 }
 
 /**
@@ -59,6 +86,8 @@ export class ConflictsDialog extends React.Component<
   IConflictsDialogProps,
   IConflictsDialogState
 > {
+  private unmounted = false
+
   public constructor(props: IConflictsDialogProps) {
     super(props)
     this.state = {
@@ -66,6 +95,11 @@ export class ConflictsDialog extends React.Component<
       isAborting: false,
       isFileResolutionOptionsMenuOpen: false,
       countResolved: null,
+      aiResolvingPath: null,
+      aiProposal: null,
+      aiQueue: [],
+      aiError: null,
+      isApplyingAIProposal: false,
     }
   }
 
@@ -74,6 +108,8 @@ export class ConflictsDialog extends React.Component<
    *  this operation
    */
   public componentWillUnmount() {
+    this.unmounted = true
+
     const {
       workingDirectory,
       userHasResolvedConflicts,
@@ -140,12 +176,136 @@ export class ConflictsDialog extends React.Component<
     this.setState({ isFileResolutionOptionsMenuOpen })
   }
 
+  private get isAIEnabled() {
+    return getAISettings().enabled
+  }
+
+  private get isAIBusy() {
+    return (
+      this.state.aiResolvingPath !== null ||
+      this.state.aiProposal !== null ||
+      this.state.isApplyingAIProposal
+    )
+  }
+
+  /** Paths of the files that still have conflict markers */
+  private getFilesResolvableWithAI(): ReadonlyArray<string> {
+    const { workingDirectory, manualResolutions } = this.props
+    return getUnmergedFiles(workingDirectory)
+      .filter(
+        f =>
+          isConflictedFile(f.status) &&
+          isConflictWithMarkers(f.status) &&
+          hasUnresolvedConflicts(f.status, manualResolutions.get(f.path))
+      )
+      .map(f => f.path)
+  }
+
+  private onResolveWithAI = (path: string) => {
+    this.requestAIProposal(path, [])
+  }
+
+  private onResolveAllWithAI = () => {
+    const [first, ...rest] = this.getFilesResolvableWithAI()
+    if (first !== undefined) {
+      this.requestAIProposal(first, rest)
+    }
+  }
+
+  private async requestAIProposal(path: string, queue: ReadonlyArray<string>) {
+    this.setState({
+      aiResolvingPath: path,
+      aiQueue: queue,
+      aiError: null,
+      aiProposal: null,
+    })
+
+    const result = await proposeAIConflictResolution(
+      this.props.repository,
+      path,
+      this.props.ourBranch,
+      this.props.theirBranch
+    )
+
+    if (this.unmounted) {
+      return
+    }
+
+    if (result.kind === 'error') {
+      this.setState({
+        aiResolvingPath: null,
+        aiQueue: [],
+        aiError: result.message,
+      })
+      return
+    }
+
+    this.setState({
+      aiResolvingPath: null,
+      aiProposal: { path, resolution: result.value },
+    })
+  }
+
+  /** Moves on to the next file when using "Resolve all with AI" */
+  private continueAIQueue() {
+    const [next, ...rest] = this.state.aiQueue
+    if (next !== undefined) {
+      this.requestAIProposal(next, rest)
+    }
+  }
+
+  private onApplyAIProposal = async () => {
+    const { aiProposal } = this.state
+    if (aiProposal === null) {
+      return
+    }
+
+    this.setState({ isApplyingAIProposal: true })
+
+    try {
+      await applyAIConflictResolution(
+        this.props.repository,
+        aiProposal.path,
+        aiProposal.resolution.resolvedContents
+      )
+      await this.props.dispatcher.refreshRepository(this.props.repository)
+    } catch (e) {
+      if (!this.unmounted) {
+        this.setState({
+          isApplyingAIProposal: false,
+          aiQueue: [],
+          aiError: `Could not write ${aiProposal.path}: ${e}`,
+        })
+      }
+      return
+    }
+
+    if (this.unmounted) {
+      return
+    }
+
+    this.setState({ isApplyingAIProposal: false, aiProposal: null }, () =>
+      this.continueAIQueue()
+    )
+  }
+
+  private onDiscardAIProposal = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault()
+    this.setState({ aiProposal: null }, () => this.continueAIQueue())
+  }
+
+  private onCancelAIQueue = () => {
+    this.setState({ aiQueue: [], aiProposal: null })
+  }
+
   /**
    *  Renders the list of conflicts in the dialog
    */
   private renderUnmergedFiles(
     files: ReadonlyArray<WorkingDirectoryFileChange>
   ) {
+    const aiEnabled = this.isAIEnabled
+
     return (
       <ul className="unmerged-file-statuses">
         {files.map(f =>
@@ -164,10 +324,36 @@ export class ConflictsDialog extends React.Component<
                   this.state.isFileResolutionOptionsMenuOpen,
                 setIsFileResolutionOptionsMenuOpen:
                   this.setIsFileResolutionOptionsMenuOpen,
+                onResolveWithAI: aiEnabled ? this.onResolveWithAI : undefined,
+                isResolvingWithAI: this.state.aiResolvingPath === f.path,
+                isAIBusy: this.isAIBusy,
               })
             : null
         )}
       </ul>
+    )
+  }
+
+  private renderResolveAllWithAI() {
+    if (!this.isAIEnabled) {
+      return null
+    }
+
+    const count = this.getFilesResolvableWithAI().length
+    if (count < 2) {
+      return null
+    }
+
+    return (
+      <div className="resolve-all-with-ai">
+        <LinkButton onClick={this.onResolveAllWithAI} disabled={this.isAIBusy}>
+          <Octicon symbol={octicons.sparkleFill} />
+          Resolve all {count} files with AI
+        </LinkButton>
+        <span className="ai-hint">
+          You'll review each proposal before it's applied.
+        </span>
+      </div>
     )
   }
 
@@ -182,9 +368,46 @@ export class ConflictsDialog extends React.Component<
     return (
       <>
         {renderUnmergedFilesSummary(conflictedFilesCount)}
+        {this.renderResolveAllWithAI()}
         {this.renderUnmergedFiles(unmergedFiles)}
         {renderShellLink(this.openThisRepositoryInShell)}
       </>
+    )
+  }
+
+  private renderAIProposal(proposal: IAIProposal) {
+    const { resolution } = proposal
+    const confidenceLabel = {
+      high: 'High confidence',
+      medium: 'Medium confidence — review carefully',
+      low: 'Low confidence — review very carefully',
+    }[resolution.confidence]
+
+    return (
+      <div className="ai-conflict-proposal">
+        <div className="ai-proposal-header">
+          <Octicon symbol={octicons.sparkleFill} />
+          <PathText path={proposal.path} />
+          <span
+            className={`ai-confidence ai-confidence-${resolution.confidence}`}
+          >
+            {confidenceLabel}
+          </span>
+        </div>
+        {this.state.aiQueue.length > 0 && (
+          <div className="ai-queue-status">
+            {this.state.aiQueue.length} more file
+            {this.state.aiQueue.length === 1 ? '' : 's'} after this one.{' '}
+            <LinkButton onClick={this.onCancelAIQueue}>Stop</LinkButton>
+          </div>
+        )}
+        <h3>How the conflicts were resolved</h3>
+        <div className="ai-explanation">{resolution.explanation}</div>
+        <h3>Proposed file contents</h3>
+        <pre className="ai-resolved-contents">
+          {resolution.resolvedContents}
+        </pre>
+      </div>
     )
   }
 
@@ -228,6 +451,7 @@ export class ConflictsDialog extends React.Component<
       submitButton,
       abortButton,
     } = this.props
+    const { aiProposal, aiError, isApplyingAIProposal } = this.state
 
     const unmergedFiles = getUnmergedFiles(this.props.workingDirectory)
     const conflictedFiles = getConflictedFiles(
@@ -240,29 +464,48 @@ export class ConflictsDialog extends React.Component<
         ? 'Resolve all changes before continuing'
         : undefined
 
+    const busy = this.state.isCommitting || isApplyingAIProposal
+
     return (
       <Dialog
         id="conflicts-dialog"
-        dismissDisabled={this.state.isCommitting}
+        className={aiProposal !== null ? 'showing-ai-proposal' : undefined}
+        dismissDisabled={busy || this.state.aiResolvingPath !== null}
         onDismissed={this.props.onDismissed}
-        onSubmit={this.onSubmit}
+        onSubmit={aiProposal !== null ? this.onApplyAIProposal : this.onSubmit}
         title={headerTitle}
-        loading={this.state.isCommitting}
-        disabled={this.state.isCommitting}
+        loading={busy}
+        disabled={busy}
       >
-        {this.renderBanner(conflictedFiles.length)}
+        {aiError !== null && <DialogError>{aiError}</DialogError>}
+        {aiProposal === null && this.renderBanner(conflictedFiles.length)}
         <DialogContent>
-          {this.renderContent(unmergedFiles, conflictedFiles.length)}
+          {aiProposal !== null
+            ? this.renderAIProposal(aiProposal)
+            : this.renderContent(unmergedFiles, conflictedFiles.length)}
         </DialogContent>
         <DialogFooter>
-          <OkCancelButtonGroup
-            okButtonText={submitButton}
-            okButtonDisabled={conflictedFiles.length > 0}
-            okButtonTitle={tooltipString}
-            cancelButtonText={abortButton}
-            onCancelButtonClick={this.onAbort}
-            cancelButtonDisabled={this.state.isAborting}
-          />
+          {aiProposal !== null ? (
+            <OkCancelButtonGroup
+              okButtonText="Apply resolution"
+              cancelButtonText="Discard"
+              onCancelButtonClick={this.onDiscardAIProposal}
+            />
+          ) : (
+            <OkCancelButtonGroup
+              okButtonText={submitButton}
+              okButtonDisabled={
+                conflictedFiles.length > 0 ||
+                this.state.aiResolvingPath !== null
+              }
+              okButtonTitle={tooltipString}
+              cancelButtonText={abortButton}
+              onCancelButtonClick={this.onAbort}
+              cancelButtonDisabled={
+                this.state.isAborting || this.state.aiResolvingPath !== null
+              }
+            />
+          )}
         </DialogFooter>
       </Dialog>
     )

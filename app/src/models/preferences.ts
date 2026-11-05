@@ -7,4 +7,5 @@ export enum PreferencesTab {
   Prompts,
   Advanced,
   Accessibility,
+  AI,
 }

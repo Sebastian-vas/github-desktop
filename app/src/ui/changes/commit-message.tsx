@@ -55,6 +55,8 @@ import { RepoRulesetsForBranchLink } from '../repository-rules/repo-rulesets-for
 import { RepoRulesMetadataFailureList } from '../repository-rules/repo-rules-failure-list'
 import { formatCommitMessage } from '../../lib/format-commit-message'
 import { useRepoRulesLogic } from '../../lib/helpers/repo-rules'
+import { WorkingDirectoryFileChange } from '../../models/status'
+import { generateAICommitMessage, getAISettings } from '../../lib/ai'
 
 const addAuthorIcon: OcticonSymbolVariant = {
   w: 18,
@@ -173,6 +175,13 @@ interface ICommitMessageProps {
   readonly onFilesToCommitNotVisible?: (onCommitAnyway: () => {}) => void
   readonly onSuccessfulCommitCreated?: () => void
   readonly accounts: ReadonlyArray<Account>
+
+  /**
+   * The files that will be included in the commit. When provided (and AI
+   * features are enabled in the preferences) a button to generate the commit
+   * message with AI is shown.
+   */
+  readonly filesToCommit?: ReadonlyArray<WorkingDirectoryFileChange>
 }
 
 interface ICommitMessageState {
@@ -200,6 +209,11 @@ interface ICommitMessageState {
   readonly repoRuleCommitMessageFailures: RepoRulesMetadataFailures
   readonly repoRuleCommitAuthorFailures: RepoRulesMetadataFailures
   readonly repoRuleBranchNameFailures: RepoRulesMetadataFailures
+
+  /** Whether a commit message is being generated with AI */
+  readonly isGeneratingWithAI: boolean
+  /** The error of the last AI generation attempt, if it failed */
+  readonly aiError: string | null
 }
 
 function findCommitMessageAutoCompleteProvider(
@@ -256,6 +270,8 @@ export class CommitMessage extends React.Component<
       repoRuleCommitMessageFailures: new RepoRulesMetadataFailures(),
       repoRuleCommitAuthorFailures: new RepoRulesMetadataFailures(),
       repoRuleBranchNameFailures: new RepoRulesMetadataFailures(),
+      isGeneratingWithAI: false,
+      aiError: null,
     }
   }
 
@@ -870,11 +886,94 @@ export class CommitMessage extends React.Component<
    * Whether or not there's anything to render in the action bar
    */
   private get isActionBarEnabled() {
-    return this.isCoAuthorInputEnabled
+    return this.isCoAuthorInputEnabled || this.isAIGenerationEnabled
+  }
+
+  private get isAIGenerationEnabled() {
+    return this.props.filesToCommit !== undefined && getAISettings().enabled
+  }
+
+  private onGenerateWithAI = async (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault()
+
+    const { filesToCommit, repository, branch } = this.props
+    if (filesToCommit === undefined || this.state.isGeneratingWithAI) {
+      return
+    }
+
+    this.setState({ isGeneratingWithAI: true, aiError: null })
+
+    const result = await generateAICommitMessage(
+      repository,
+      filesToCommit,
+      branch,
+      this.state.summary
+    )
+
+    if (result.kind === 'error') {
+      this.setState({ isGeneratingWithAI: false, aiError: result.message })
+      return
+    }
+
+    const { summary, description } = result.value
+    this.setState({
+      isGeneratingWithAI: false,
+      summary,
+      description: description.length > 0 ? description : null,
+    })
+    this.focusSummary()
+  }
+
+  private renderAIGenerateButton() {
+    if (!this.isAIGenerationEnabled) {
+      return null
+    }
+
+    const { isGeneratingWithAI } = this.state
+    const label = isGeneratingWithAI
+      ? 'Generating commit message…'
+      : 'Generate commit message with AI'
+
+    return (
+      <Button
+        className="ai-generate-button"
+        onClick={this.onGenerateWithAI}
+        ariaLabel={label}
+        tooltip={label}
+        disabled={
+          isGeneratingWithAI ||
+          this.props.isCommitting === true ||
+          !this.props.anyFilesSelected
+        }
+      >
+        {isGeneratingWithAI ? (
+          <Loading />
+        ) : (
+          <Octicon symbol={octicons.sparkleFill} />
+        )}
+      </Button>
+    )
+  }
+
+  private renderAIError() {
+    if (this.state.aiError === null) {
+      return null
+    }
+
+    return (
+      <CommitWarning icon={CommitWarningIcon.Error}>
+        {this.state.aiError}{' '}
+        <LinkButton onClick={this.onDismissAIError}>Dismiss</LinkButton>
+      </CommitWarning>
+    )
+  }
+
+  private onDismissAIError = () => {
+    this.setState({ aiError: null })
   }
 
   private renderActionBar() {
-    if (!this.isCoAuthorInputEnabled) {
+    if (!this.isActionBarEnabled) {
       return null
     }
 
@@ -882,7 +981,12 @@ export class CommitMessage extends React.Component<
       disabled: this.props.isCommitting === true,
     })
 
-    return <div className={className}>{this.renderCoAuthorToggleButton()}</div>
+    return (
+      <div className={className}>
+        {this.renderCoAuthorToggleButton()}
+        {this.renderAIGenerateButton()}
+      </div>
+    )
   }
 
   private renderAmendCommitNotice() {
@@ -1415,6 +1519,7 @@ export class CommitMessage extends React.Component<
 
         {this.renderCoAuthorInput()}
 
+        {this.renderAIError()}
         {this.renderAmendCommitNotice()}
         {this.renderBranchProtectionsRepoRulesCommitWarning()}
 

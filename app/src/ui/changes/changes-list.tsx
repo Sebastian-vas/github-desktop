@@ -861,6 +861,7 @@ export class ChangesList extends React.Component<
         onStopAmending={this.onStopAmending}
         onShowCreateForkDialog={this.onShowCreateForkDialog}
         accounts={this.props.accounts}
+        filesToCommit={filesSelected}
       />
     )
   }

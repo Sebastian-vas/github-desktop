@@ -171,6 +171,10 @@
       // We're not faking being a textbox any more
       cursor: default;
 
+      display: flex;
+      align-items: center;
+      gap: var(--spacing);
+
       // This gets rid of the padding for the action bar
       // when there's no buttons showing.
       &:empty {
@@ -179,6 +183,38 @@
 
       &.disabled {
         background: var(--box-alt-background-color);
+      }
+    }
+
+    .ai-generate-button {
+      // button reset styles
+      border: none;
+      border-radius: 0px;
+      -webkit-appearance: none;
+      background: transparent;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      height: 16px;
+      min-width: 16px;
+      color: var(--text-secondary-color);
+      cursor: pointer;
+
+      &:hover,
+      &:focus-visible {
+        color: var(--link-button-color);
+      }
+
+      &:disabled {
+        pointer-events: none;
+        opacity: 0.6;
+      }
+
+      svg {
+        height: 14px;
+        width: 14px;
+        pointer-events: none;
       }
     }
 

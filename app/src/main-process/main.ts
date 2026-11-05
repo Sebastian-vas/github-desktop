@@ -55,6 +55,7 @@ import {
 import { initializeDesktopNotifications } from './notifications'
 import parseCommandLineArgs from 'minimist'
 import { CLIAction } from '../lib/cli-action'
+import { generateCommitMessageWithAI, resolveConflictWithAI } from './ai'
 
 app.setAppLogsPath()
 enableSourceMaps()
@@ -535,6 +536,14 @@ app.on('ready', () => {
 
   ipcMain.handle('get-current-window-zoom-factor', async () =>
     mainWindow?.getCurrentWindowZoomFactor()
+  )
+
+  ipcMain.handle('ai-resolve-conflict', async (_, request) =>
+    resolveConflictWithAI(request)
+  )
+
+  ipcMain.handle('ai-generate-commit-message', async (_, request) =>
+    generateCommitMessageWithAI(request)
   )
 
   ipcMain.on('set-window-zoom-factor', (_, zoomFactor: number) =>

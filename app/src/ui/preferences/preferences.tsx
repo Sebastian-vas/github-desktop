@@ -48,6 +48,14 @@ import {
   TargetPathArgument,
   isValidCustomIntegration,
 } from '../../lib/custom-integration'
+import { AI } from './ai'
+import { AIModelId, AIOutputLanguage } from '../../lib/ai/types'
+import {
+  getAIApiKey,
+  getAISettings,
+  setAIApiKey,
+  setAISettings,
+} from '../../lib/ai/settings'
 
 interface IPreferencesProps {
   readonly dispatcher: Dispatcher
@@ -138,6 +146,11 @@ interface IPreferencesState {
   readonly showDiffCheckMarks: boolean
 
   readonly canFilterChanges: boolean
+  readonly aiEnabled: boolean
+  readonly aiApiKey: string
+  readonly initialAIApiKey: string
+  readonly aiModel: AIModelId
+  readonly aiLanguage: AIOutputLanguage
 }
 
 /**
@@ -157,6 +170,8 @@ export class Preferences extends React.Component<
 > {
   public constructor(props: IPreferencesProps) {
     super(props)
+
+    const aiSettings = getAISettings()
 
     this.state = {
       selectedIndex: this.props.initialSelectedTab || PreferencesTab.Accounts,
@@ -197,6 +212,11 @@ export class Preferences extends React.Component<
       underlineLinks: this.props.underlineLinks,
       showDiffCheckMarks: this.props.showDiffCheckMarks,
       canFilterChanges: this.props.canFilterChanges,
+      aiApiKey: '',
+      initialAIApiKey: '',
+      aiEnabled: aiSettings.enabled,
+      aiModel: aiSettings.model,
+      aiLanguage: aiSettings.language,
     }
   }
 
@@ -233,6 +253,8 @@ export class Preferences extends React.Component<
     const availableEditors = editors.map(e => e.editor) ?? null
     const availableShells = shells.map(e => e.shell) ?? null
 
+    const aiApiKey = (await getAIApiKey()) ?? ''
+
     this.setState({
       committerName,
       committerEmail,
@@ -263,6 +285,8 @@ export class Preferences extends React.Component<
       useCustomShell: this.props.useCustomShell,
       customShell: this.props.customShell ?? DefaultCustomIntegration,
       isLoadingGitConfig: false,
+      aiApiKey,
+      initialAIApiKey: aiApiKey,
     })
   }
 
@@ -324,6 +348,10 @@ export class Preferences extends React.Component<
               <Octicon className="icon" symbol={octicons.accessibility} />
               Accessibility
             </span>
+            <span id={this.getTabId(PreferencesTab.AI)}>
+              <Octicon className="icon" symbol={octicons.sparkleFill} />
+              AI
+            </span>
           </TabBar>
 
           {this.renderActiveTab()}
@@ -359,6 +387,9 @@ export class Preferences extends React.Component<
         break
       case PreferencesTab.Accessibility:
         suffix = 'accessibility'
+        break
+      case PreferencesTab.AI:
+        suffix = 'ai'
         break
       default:
         return assertNever(tab, `Unknown tab type: ${tab}`)
@@ -550,6 +581,20 @@ export class Preferences extends React.Component<
           />
         )
         break
+      case PreferencesTab.AI:
+        View = (
+          <AI
+            enabled={this.state.aiEnabled}
+            apiKey={this.state.aiApiKey}
+            model={this.state.aiModel}
+            language={this.state.aiLanguage}
+            onEnabledChanged={this.onAIEnabledChanged}
+            onApiKeyChanged={this.onAIApiKeyChanged}
+            onModelChanged={this.onAIModelChanged}
+            onLanguageChanged={this.onAILanguageChanged}
+          />
+        )
+        break
       default:
         return assertNever(index, `Unknown tab index: ${index}`)
     }
@@ -563,6 +608,22 @@ export class Preferences extends React.Component<
         {View}
       </div>
     )
+  }
+
+  private onAIEnabledChanged = (aiEnabled: boolean) => {
+    this.setState({ aiEnabled })
+  }
+
+  private onAIApiKeyChanged = (aiApiKey: string) => {
+    this.setState({ aiApiKey })
+  }
+
+  private onAIModelChanged = (aiModel: AIModelId) => {
+    this.setState({ aiModel })
+  }
+
+  private onAILanguageChanged = (aiLanguage: AIOutputLanguage) => {
+    this.setState({ aiLanguage })
   }
 
   private onRepositoryIndicatorsEnabledChanged = (
@@ -775,6 +836,21 @@ export class Preferences extends React.Component<
       this.props.onDismissed()
       dispatcher.postError(e)
       return
+    }
+
+    setAISettings({
+      enabled: this.state.aiEnabled,
+      model: this.state.aiModel,
+      language: this.state.aiLanguage,
+    })
+
+    if (this.state.aiApiKey !== this.state.initialAIApiKey) {
+      try {
+        await setAIApiKey(this.state.aiApiKey)
+      } catch (e) {
+        log.error('AI: unable to store the API key in the keychain', e)
+        dispatcher.postError(e)
+      }
     }
 
     dispatcher.setUseWindowsOpenSSH(this.state.useWindowsOpenSSH)
