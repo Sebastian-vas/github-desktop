@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
       - name: Set version from tag
@@ -36,7 +36,7 @@ jobs:
       # many distributions as possible (same as upstream shiftkey/desktop).
       - name: Build and package
         uses: shiftkey/desktop-ubuntu-amd64-packaging@ea7b7a6a940a6b907b160b946439c5c7a516f9f1
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-x64
           path: |
@@ -54,17 +54,17 @@ jobs:
       npm_config_arch: x64
       TARGET_ARCH: x64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
       - name: Set version from tag
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
         run: node script/set-version-from-tag.js "${GITHUB_REF_NAME}"
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: yarn
@@ -75,8 +75,9 @@ jobs:
         shell: bash
         run: |
           mkdir -p release
-          cp dist/installer/GitHubDesktopSetup-x64.exe release/GitHubDesktop-Windows-x64-Setup.exe
-      - uses: actions/upload-artifact@v4
+          # electron-winstaller writes the installer straight into dist/
+          cp dist/GitHubDesktopSetup-x64.exe release/GitHubDesktop-Windows-x64-Setup.exe
+      - uses: actions/upload-artifact@v7
         with:
           name: windows-x64
           path: release/*
@@ -89,8 +90,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Both on the Intel runners (the Apple Silicon build is cross-compiled,
+        # as upstream does): GitHub's arm64 macOS runners are often too busy
+        # to pick up the job at all.
         include:
-          - os: macos-15
+          - os: macos-15-intel
             arch: arm64
           - os: macos-15-intel
             arch: x64
@@ -99,16 +103,16 @@ jobs:
       npm_config_arch: ${{ matrix.arch }}
       TARGET_ARCH: ${{ matrix.arch }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
       - name: Set version from tag
         if: startsWith(github.ref, 'refs/tags/v')
         run: node script/set-version-from-tag.js "${GITHUB_REF_NAME}"
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: yarn
@@ -119,7 +123,7 @@ jobs:
         run: |
           mkdir -p release
           cp "dist/GitHub Desktop-${{ matrix.arch }}.zip" "release/GitHubDesktop-macOS-${{ matrix.arch }}.zip"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: macos-${{ matrix.arch }}
           path: release/*
@@ -133,14 +137,14 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
       - name: Checksums
         working-directory: artifacts
         run: sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           name: GitHub Desktop + AI ${{ github.ref_name }}
           generate_release_notes: true
