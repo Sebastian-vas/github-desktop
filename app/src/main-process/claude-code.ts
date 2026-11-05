@@ -1,10 +1,16 @@
-import { spawn } from 'child_process'
+import { ChildProcess, spawn } from 'child_process'
 import * as Path from 'path'
 import * as Os from 'os'
 import { access, readdir } from 'fs/promises'
 import { constants } from 'fs'
-import { shell } from 'electron'
-import { IClaudeAccountStatus } from '../lib/ai/types'
+import { shell, WebContents } from 'electron'
+import * as ipcWebContents from './ipc-webcontents'
+import {
+  AIResult,
+  ClaudeCommandEvent,
+  IClaudeAccountStatus,
+  IClaudeCommandRequest,
+} from '../lib/ai/types'
 
 /**
  * Runs requests through the Claude Code CLI (`claude -p`), which uses the
@@ -347,5 +353,228 @@ export async function requestStructuredOutputViaClaudeCode(
   } catch {
     log.error(`AI: unable to parse response from Claude: ${output.result}`)
     throw new Error('Claude returned a response that could not be read.')
+  }
+}
+
+// ------------------------------------------------------ repository commands
+
+/** Commands (skills) currently running, by run id */
+const runningCommands = new Map<string, ChildProcess>()
+
+function summarizeToolInput(name: string, input: unknown): string {
+  if (typeof input !== 'object' || input === null) {
+    return ''
+  }
+  const i = input as Record<string, unknown>
+  const pick = (...keys: string[]) => {
+    for (const key of keys) {
+      if (typeof i[key] === 'string' && (i[key] as string).length > 0) {
+        return i[key] as string
+      }
+    }
+    return null
+  }
+  const value =
+    name === 'Bash'
+      ? pick('description', 'command')
+      : pick(
+          'file_path',
+          'path',
+          'pattern',
+          'skill',
+          'description',
+          'url',
+          'query',
+          'prompt'
+        )
+  const text = value ?? JSON.stringify(input)
+  return text.length > 160 ? `${text.slice(0, 157)}…` : text
+}
+
+function toolResultText(content: unknown): string {
+  if (typeof content === 'string') {
+    return content
+  }
+  if (Array.isArray(content)) {
+    return content
+      .map(c =>
+        typeof c === 'object' && c !== null && 'text' in c
+          ? String((c as { text: unknown }).text)
+          : ''
+      )
+      .join('')
+  }
+  return ''
+}
+
+/** Turns a line of Claude Code's stream-json output into events */
+function parseStreamLine(line: string): ClaudeCommandEvent[] {
+  let message: any
+  try {
+    message = JSON.parse(line)
+  } catch {
+    return []
+  }
+
+  const events = new Array<ClaudeCommandEvent>()
+  switch (message.type) {
+    case 'system':
+      if (
+        message.subtype === 'init' &&
+        typeof message.session_id === 'string'
+      ) {
+        events.push({ kind: 'session', sessionId: message.session_id })
+      }
+      break
+    case 'assistant':
+      // Only the main conversation, not what subagents do.
+      if (message.parent_tool_use_id) {
+        break
+      }
+      for (const block of message.message?.content ?? []) {
+        if (block.type === 'text' && block.text?.trim().length > 0) {
+          events.push({ kind: 'text', text: block.text })
+        } else if (block.type === 'tool_use') {
+          events.push({
+            kind: 'tool',
+            id: block.id,
+            name: block.name,
+            summary: summarizeToolInput(block.name, block.input),
+          })
+        }
+      }
+      break
+    case 'user':
+      if (message.parent_tool_use_id) {
+        break
+      }
+      for (const block of message.message?.content ?? []) {
+        if (block.type === 'tool_result') {
+          const output = toolResultText(block.content)
+          events.push({
+            kind: 'tool-result',
+            id: block.tool_use_id,
+            isError: block.is_error === true,
+            output: output.length > 2000 ? `${output.slice(0, 2000)}…` : output,
+          })
+        }
+      }
+      break
+    case 'result':
+      events.push({
+        kind: 'result',
+        isError: message.is_error === true || message.subtype !== 'success',
+        text:
+          typeof message.result === 'string'
+            ? message.result
+            : message.subtype ?? '',
+        durationMs:
+          typeof message.duration_ms === 'number' ? message.duration_ms : null,
+        turns: typeof message.num_turns === 'number' ? message.num_turns : null,
+      })
+      break
+  }
+  return events
+}
+
+/**
+ * Runs a prompt (usually a project skill such as "/pull") with Claude Code in
+ * the repository, streaming what Claude does to the renderer.
+ */
+export async function startClaudeCommand(
+  request: IClaudeCommandRequest,
+  sender: WebContents
+): Promise<AIResult<null>> {
+  const executable = await findClaudeExecutable()
+  if (executable === null) {
+    return { kind: 'error', message: NotInstalledMessage }
+  }
+
+  const send = (event: ClaudeCommandEvent) => {
+    if (!sender.isDestroyed()) {
+      ipcWebContents.send(sender, 'claude-command-event', request.runId, event)
+    }
+  }
+
+  const args = [
+    '--print',
+    '--output-format',
+    'stream-json',
+    '--verbose',
+    '--model',
+    request.model,
+    '--permission-mode',
+    request.permission,
+  ]
+  if (request.resumeSessionId !== null) {
+    args.push('--resume', request.resumeSessionId)
+  }
+
+  let child: ChildProcess
+  try {
+    child = spawn(executable, args, {
+      cwd: request.cwd,
+      env: childEnvironment(),
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
+    })
+  } catch (e) {
+    return { kind: 'error', message: `Could not start Claude Code: ${e}` }
+  }
+
+  runningCommands.set(request.runId, child)
+
+  let buffer = ''
+  let stderr = ''
+  let sawResult = false
+  child.stdout?.setEncoding('utf8')
+  child.stderr?.setEncoding('utf8')
+  child.stdout?.on('data', (chunk: string) => {
+    buffer += chunk
+    let newline = buffer.indexOf('\n')
+    while (newline !== -1) {
+      const line = buffer.slice(0, newline).trim()
+      buffer = buffer.slice(newline + 1)
+      for (const event of parseStreamLine(line)) {
+        if (event.kind === 'result') {
+          sawResult = true
+        }
+        send(event)
+      }
+      newline = buffer.indexOf('\n')
+    }
+  })
+  child.stderr?.on('data', (chunk: string) => {
+    stderr += chunk
+  })
+  child.on('error', e => {
+    runningCommands.delete(request.runId)
+    send({ kind: 'exit', code: -1, error: e.message })
+  })
+  child.on('close', code => {
+    runningCommands.delete(request.runId)
+    for (const event of parseStreamLine(buffer.trim())) {
+      send(event)
+    }
+    const error =
+      !sawResult && stderr.trim().length > 0
+        ? /not logged in|\/login/i.test(stderr)
+          ? NotLoggedInMessage
+          : stderr.trim().slice(-2000)
+        : null
+    send({ kind: 'exit', code, error })
+  })
+
+  child.stdin?.on('error', () => {})
+  child.stdin?.end(request.prompt, 'utf8')
+
+  return { kind: 'success', value: null }
+}
+
+export function stopClaudeCommand(runId: string) {
+  const child = runningCommands.get(runId)
+  if (child !== undefined) {
+    child.kill()
+    runningCommands.delete(runId)
   }
 }

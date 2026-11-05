@@ -55,6 +55,7 @@ import {
   PushPullButton,
   BranchDropdown,
   RevertProgress,
+  ToolbarButton,
 } from './toolbar'
 import { iconForRepository, OcticonSymbol } from './octicons'
 import * as octicons from './octicons/octicons.generated'
@@ -72,6 +73,14 @@ import { AppMenuBar } from './app-menu'
 import { UpdateAvailable, renderBanner } from './banners'
 import { Preferences } from './preferences'
 import { CommitMergeMainDialog } from './commit-merge-main/commit-merge-main-dialog'
+import { ReleaseToProductionDialog } from './git-flows/release-to-production-dialog'
+import { SafePullDialog } from './git-flows/safe-pull-dialog'
+import { AIReviewDialog } from './ai-review/ai-review-dialog'
+import { RepoCommandsDialog } from './repo-commands/repo-commands-dialog'
+import { getAISettings } from '../lib/ai/settings'
+import { DiffSelectionType } from '../models/diff'
+import { getRepositoryCommands } from '../lib/repo-commands'
+import { IMenuItem } from '../lib/menu-item'
 import { ConfirmRestart } from './preferences/confirm-restart'
 import { RepositorySettings } from './repository-settings'
 import { AppError } from './app-error'
@@ -410,6 +419,16 @@ export class App extends React.Component<IAppProps, IAppState> {
     }
 
     switch (name) {
+      case 'flows-safe-pull':
+        return this.showSafePull()
+      case 'flows-commit-merge-main':
+        return this.showCommitMergeMain()
+      case 'flows-release-production':
+        return this.showReleaseToProduction()
+      case 'flows-ai-review':
+        return this.showAIReview()
+      case 'flows-repo-commands':
+        return this.showRepoCommands()
       case 'push':
         return this.push()
       case 'force-push':
@@ -945,7 +964,203 @@ export class App extends React.Component<IAppProps, IAppState> {
       return
     }
 
-    this.props.dispatcher.pull(state.repository)
+    this.props.dispatcher.pullFromUI(state.repository)
+  }
+
+  // --------------------------------------------------------------- flows
+
+  /** What the flows need to know about the selected repository */
+  private getFlowContext() {
+    const state = this.state.selectedState
+    if (state == null || state.type !== SelectionType.Repository) {
+      return null
+    }
+    const { repository } = state
+    const { tip, defaultBranch } = state.state.branchesState
+    const branch = tip.kind === TipState.Valid ? tip.branch.name : null
+    const main = defaultBranch?.nameWithoutRemote ?? null
+    const selectedFiles =
+      state.state.changesState.workingDirectory.files.filter(
+        f => f.selection.getSelectionType() !== DiffSelectionType.None
+      )
+    return { repository, branch, main, selectedFiles }
+  }
+
+  private postFlowError(message: string) {
+    this.props.dispatcher.postError(new Error(message))
+  }
+
+  private showSafePull = () => {
+    const context = this.getFlowContext()
+    if (context === null) {
+      return
+    }
+    if (context.branch === null) {
+      return this.postFlowError('Check out a branch to pull.')
+    }
+    this.props.dispatcher.showPopup({
+      type: PopupType.SafePull,
+      repository: context.repository,
+      branch: context.branch,
+    })
+  }
+
+  private showCommitMergeMain = () => {
+    const context = this.getFlowContext()
+    if (context === null) {
+      return
+    }
+    const { branch, main } = context
+    if (branch === null || main === null) {
+      return this.postFlowError(
+        "The current branch or the repository's main branch is unknown."
+      )
+    }
+    if (branch === main) {
+      return this.postFlowError(
+        `You're on ${main}: switch to the branch you want to merge into ${main}, or use "Release to production".`
+      )
+    }
+    // From the menu nothing is committed: commit from the Changes tab to
+    // include a commit in the flow.
+    this.props.dispatcher.showPopup({
+      type: PopupType.CommitMergeMain,
+      repository: context.repository,
+      branch,
+      mainBranch: main,
+      commitContext: null,
+      filesToCommitCount: 0,
+    })
+  }
+
+  private showReleaseToProduction = () => {
+    const context = this.getFlowContext()
+    if (context === null) {
+      return
+    }
+    const { branch, main } = context
+    if (main === null) {
+      return this.postFlowError("The repository's main branch is unknown.")
+    }
+    if (branch !== main) {
+      return this.postFlowError(
+        `Releases go out from ${main}. Switch to ${main} first (or use "Commit, merge into main & push" to bring your branch there).`
+      )
+    }
+    this.props.dispatcher.showPopup({
+      type: PopupType.ReleaseToProduction,
+      repository: context.repository,
+      mainBranch: main,
+      commitContext: null,
+      filesToCommitCount: 0,
+    })
+  }
+
+  private showAIReview = () => {
+    const context = this.getFlowContext()
+    if (context === null) {
+      return
+    }
+    if (!getAISettings().enabled) {
+      return this.props.dispatcher.showPopup({
+        type: PopupType.Preferences,
+        initialSelectedTab: PreferencesTab.AI,
+      })
+    }
+    if (context.selectedFiles.length === 0) {
+      return this.postFlowError(
+        'There are no selected changes to review. Select files in the Changes tab.'
+      )
+    }
+    this.props.dispatcher.showPopup({
+      type: PopupType.AIReview,
+      repository: context.repository,
+      files: context.selectedFiles,
+      branch: context.branch,
+    })
+  }
+
+  private showRepoCommands = (initialCommand?: string) => {
+    const context = this.getFlowContext()
+    if (context === null) {
+      return
+    }
+    this.props.dispatcher.showPopup({
+      type: PopupType.RepoCommands,
+      repository: context.repository,
+      initialCommand,
+    })
+  }
+
+  private onFlowsButtonClick = async () => {
+    const context = this.getFlowContext()
+    if (context === null) {
+      return
+    }
+    const { branch, main } = context
+    const onMain = branch !== null && branch === main
+    const commands = await getRepositoryCommands(context.repository.path)
+
+    const commandItems: IMenuItem[] = [
+      ...commands.slice(0, 25).map(c => ({
+        label: `/${c.name}`,
+        action: () => this.showRepoCommands(c.name),
+      })),
+      { type: 'separator' },
+      { label: 'All commands…', action: () => this.showRepoCommands() },
+    ]
+
+    const items: IMenuItem[] = [
+      {
+        label: 'Pull without losing changes',
+        action: this.showSafePull,
+        enabled: branch !== null,
+      },
+      {
+        label: `Commit, merge into ${main ?? 'main'} & push…`,
+        action: this.showCommitMergeMain,
+        enabled: !onMain && main !== null,
+      },
+      {
+        label: 'Release to production…',
+        action: this.showReleaseToProduction,
+        enabled: onMain,
+      },
+      { type: 'separator' },
+      {
+        label: 'Review changes with AI',
+        action: this.showAIReview,
+        enabled: context.selectedFiles.length > 0,
+      },
+      { type: 'separator' },
+      commands.length > 0
+        ? {
+            label: `Repository commands (${commands.length})`,
+            submenu: commandItems,
+          }
+        : {
+            label: 'Repository commands…',
+            action: () => this.showRepoCommands(),
+          },
+    ]
+
+    showContextualMenu(items)
+  }
+
+  private renderFlowsToolbarButton() {
+    if (this.getFlowContext() === null) {
+      return null
+    }
+    return (
+      <ToolbarButton
+        className="flows-toolbar-button"
+        title="Flows"
+        description="Team workflows & AI"
+        icon={octicons.workflow}
+        onClick={this.onFlowsButtonClick}
+        tooltip="Pull safely, merge into main, release to production, review with AI and run the repository's Claude Code commands"
+      />
+    )
   }
 
   private async fetch() {
@@ -2513,6 +2728,55 @@ export class App extends React.Component<IAppProps, IAppState> {
             onDismissed={onPopupDismissedFn}
           />
         )
+      case PopupType.ReleaseToProduction:
+        return (
+          <ReleaseToProductionDialog
+            key="release-to-production"
+            dispatcher={this.props.dispatcher}
+            repository={popup.repository}
+            mainBranch={popup.mainBranch}
+            commitContext={popup.commitContext}
+            filesToCommitCount={popup.filesToCommitCount}
+            onCommitCreated={popup.onCommitCreated}
+            resolvedExternalEditor={this.state.resolvedExternalEditor}
+            openFileInExternalEditor={this.openFileInExternalEditor}
+            onDismissed={onPopupDismissedFn}
+          />
+        )
+      case PopupType.SafePull:
+        return (
+          <SafePullDialog
+            key="safe-pull"
+            dispatcher={this.props.dispatcher}
+            repository={popup.repository}
+            branch={popup.branch}
+            resolvedExternalEditor={this.state.resolvedExternalEditor}
+            openFileInExternalEditor={this.openFileInExternalEditor}
+            onDismissed={onPopupDismissedFn}
+          />
+        )
+      case PopupType.AIReview:
+        return (
+          <AIReviewDialog
+            key="ai-review"
+            repository={popup.repository}
+            files={popup.files}
+            branch={popup.branch}
+            resolvedExternalEditor={this.state.resolvedExternalEditor}
+            openFileInExternalEditor={this.openFileInExternalEditor}
+            onDismissed={onPopupDismissedFn}
+          />
+        )
+      case PopupType.RepoCommands:
+        return (
+          <RepoCommandsDialog
+            key="repo-commands"
+            dispatcher={this.props.dispatcher}
+            repository={popup.repository}
+            initialCommand={popup.initialCommand}
+            onDismissed={onPopupDismissedFn}
+          />
+        )
       default:
         return assertNever(popup, `Unknown popup type: ${popup}`)
     }
@@ -3196,6 +3460,7 @@ export class App extends React.Component<IAppProps, IAppState> {
         </div>
         {this.renderBranchToolbarButton()}
         {this.renderPushPullToolbarButton()}
+        {this.renderFlowsToolbarButton()}
       </Toolbar>
     )
   }

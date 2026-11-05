@@ -1,6 +1,8 @@
 @import '../mixins';
 @import 'dialogs/conflicts';
-@import 'dialogs/commit-merge-main';
+@import 'dialogs/git-flows';
+@import 'dialogs/ai-review';
+@import 'dialogs/repo-commands';
 @import 'dialogs/progress-dialog';
 @import 'dialogs/abort-merge';
 @import 'dialogs/push-needs-pull';

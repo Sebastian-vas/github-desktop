@@ -1,0 +1,272 @@
+@import '../../mixins';
+
+dialog#repo-commands {
+  width: 760px;
+  max-width: calc(100vw - var(--spacing-double) * 2);
+
+  .dialog-content {
+    padding-bottom: var(--spacing);
+  }
+
+  .repo-commands-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing);
+    padding: var(--spacing-double);
+    text-align: center;
+    color: var(--text-secondary-color);
+
+    > .octicon {
+      width: 32px;
+      height: 32px;
+    }
+  }
+
+  // --------------------------------------------------------------- picker
+
+  .repo-commands-picker {
+    display: flex;
+    gap: var(--spacing-double);
+    height: 380px;
+  }
+
+  .repo-commands-list {
+    flex: 0 0 300px;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+
+    ul {
+      list-style: none;
+      margin: var(--spacing-half) 0 0;
+      padding: 0;
+      overflow-y: auto;
+      flex: 1;
+      border: var(--base-border);
+      border-radius: var(--border-radius);
+    }
+
+    li:not(:last-child) {
+      border-bottom: var(--base-border);
+    }
+  }
+
+  .command-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    padding: var(--spacing-half) var(--spacing);
+    border: none;
+    background: transparent;
+    text-align: left;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+
+    &:hover {
+      background: var(--box-alt-background-color);
+    }
+
+    &.selected {
+      background: var(--box-selected-active-background-color);
+      color: var(--box-selected-active-text-color);
+
+      .command-description,
+      .command-name .octicon {
+        color: inherit;
+      }
+    }
+
+    .command-name {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-half);
+      font-family: var(--font-family-monospace);
+      font-weight: var(--font-weight-semibold);
+
+      .octicon {
+        color: var(--link-button-color);
+        flex-shrink: 0;
+      }
+    }
+
+    .command-description {
+      color: var(--text-secondary-color);
+      font-size: var(--font-size-sm);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+  }
+
+  .repo-commands-detail {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing);
+
+    h2 {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing);
+      margin: 0;
+      font-family: var(--font-family-monospace);
+      font-size: var(--font-size-md);
+
+      .octicon {
+        color: var(--link-button-color);
+      }
+    }
+
+    p {
+      margin: 0;
+    }
+
+    .command-full-description {
+      user-select: text;
+    }
+
+    .command-path code {
+      color: var(--text-secondary-color);
+      font-size: var(--font-size-sm);
+    }
+  }
+
+  // ------------------------------------------------------------------ run
+
+  .repo-commands-run {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing);
+    height: 420px;
+  }
+
+  .run-header {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing);
+
+    strong {
+      font-family: var(--font-family-monospace);
+    }
+
+    .run-status {
+      flex: 1;
+      color: var(--text-secondary-color);
+      font-size: var(--font-size-sm);
+    }
+
+    &.run-done > .octicon {
+      color: var(--color-new);
+    }
+
+    &.run-error > .octicon {
+      color: var(--color-deleted);
+    }
+  }
+
+  .run-log {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--spacing);
+    border: var(--base-border);
+    border-radius: var(--border-radius);
+    background: var(--box-alt-background-color);
+    user-select: text;
+
+    ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-half);
+    }
+
+    .log-prompt {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-half);
+      font-family: var(--font-family-monospace);
+      font-weight: var(--font-weight-semibold);
+      color: var(--link-button-color);
+      padding-top: var(--spacing-half);
+    }
+
+    .log-text {
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.5;
+    }
+
+    .log-tool {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--spacing-half);
+      font-size: var(--font-size-sm);
+      color: var(--text-secondary-color);
+
+      .log-tool-icon {
+        display: flex;
+        width: 16px;
+        justify-content: center;
+      }
+
+      .tool-ok-icon {
+        color: var(--color-new);
+      }
+
+      .tool-error-icon {
+        color: var(--color-deleted);
+      }
+
+      .log-tool-name {
+        font-family: var(--font-family-monospace);
+        font-weight: var(--font-weight-semibold);
+        color: var(--text-color);
+      }
+
+      .log-tool-summary {
+        min-width: 0;
+        flex: 1;
+        @include ellipsis;
+      }
+
+      .log-tool-output {
+        flex-basis: 100%;
+        margin: 0 0 0 22px;
+        padding: var(--spacing-half);
+        max-height: 120px;
+        overflow: auto;
+        border-radius: var(--border-radius);
+        background: var(--background-color);
+        font-family: var(--font-family-monospace);
+        white-space: pre-wrap;
+        color: var(--color-deleted);
+      }
+    }
+
+    .log-thinking {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-half);
+      color: var(--text-secondary-color);
+      font-style: italic;
+    }
+  }
+
+  .run-reply {
+    display: flex;
+    gap: var(--spacing);
+
+    .text-box-component {
+      flex: 1;
+    }
+  }
+}

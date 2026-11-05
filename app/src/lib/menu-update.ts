@@ -137,6 +137,12 @@ const allMenuIds: ReadonlyArray<MenuIDs> = [
   'create-pull-request',
   'preview-pull-request',
   'squash-and-merge-branch',
+  'flows',
+  'flows-safe-pull',
+  'flows-commit-merge-main',
+  'flows-release-production',
+  'flows-ai-review',
+  'flows-repo-commands',
 ]
 
 function getAllMenusDisabledBuilder(): MenuStateBuilder {
@@ -241,6 +247,12 @@ function getRepositoryMenuBuilder(state: IAppState): MenuStateBuilder {
     'show-branches-list',
     'open-external-editor',
     'compare-to-branch',
+    'flows',
+    'flows-safe-pull',
+    'flows-commit-merge-main',
+    'flows-release-production',
+    'flows-ai-review',
+    'flows-repo-commands',
   ]
 
   const menuStateBuilder = new MenuStateBuilder()

@@ -44,6 +44,11 @@ export type MenuEvent =
   | 'test-app-error'
   | 'decrease-active-resizable-width'
   | 'increase-active-resizable-width'
+  | 'flows-safe-pull'
+  | 'flows-commit-merge-main'
+  | 'flows-release-production'
+  | 'flows-ai-review'
+  | 'flows-repo-commands'
   | TestMenuEvent
 
 /**

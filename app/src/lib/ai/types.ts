@@ -73,6 +73,8 @@ export interface IAIConflictResolutionRequest extends IAIRequestOptions {
   readonly hunks: ReadonlyArray<IAIConflictHunk>
   readonly ourBranch: string | null
   readonly theirBranch: string | null
+  /** The project's instructions (CLAUDE.md…), or null */
+  readonly projectContext: string | null
 }
 
 export interface IAIHunkResolution {
@@ -103,6 +105,8 @@ export interface IAICommitMessageRequest extends IAIRequestOptions {
   readonly branch: string | null
   /** Whatever the user already typed in the summary, used as a hint */
   readonly summaryHint: string
+  /** The project's commit conventions and recent subjects, or null */
+  readonly projectContext: string | null
 }
 
 export interface IAICommitMessage {
@@ -129,3 +133,80 @@ export type IClaudeAccountStatus =
       readonly plan: string | null
     }
   | { readonly kind: 'error'; readonly message: string }
+
+export interface IAIReviewRequest extends IAIRequestOptions {
+  /** Unified diff of the changes about to be committed (may be abbreviated) */
+  readonly diff: string
+  readonly branch: string | null
+  /** The project's instructions and review agents, or null */
+  readonly projectContext: string | null
+}
+
+export type AIReviewSeverity = 'high' | 'medium' | 'low'
+
+export interface IAIReviewFinding {
+  readonly severity: AIReviewSeverity
+  /** Repository-relative path, or null for findings about the whole change */
+  readonly file: string | null
+  /** Line in the new version of the file, or null */
+  readonly line: number | null
+  readonly title: string
+  readonly detail: string
+  readonly suggestion: string
+  /** Which project rule it breaks, if any (e.g. "CLAUDE.md › Dates") */
+  readonly rule: string | null
+}
+
+export interface IAIReview {
+  readonly verdict: 'pass' | 'warnings' | 'issues'
+  readonly summary: string
+  readonly findings: ReadonlyArray<IAIReviewFinding>
+}
+
+/** How much Claude may do on its own while running a repository command */
+export type ClaudeCommandPermission =
+  | 'auto'
+  | 'acceptEdits'
+  | 'bypassPermissions'
+
+export interface IClaudeCommandRequest {
+  /** Identifies the run in the events sent back */
+  readonly runId: string
+  /** Repository the command runs in */
+  readonly cwd: string
+  /** The prompt, e.g. "/pull" or "/release-produccion commit_primero=si" */
+  readonly prompt: string
+  readonly model: AIModelId
+  readonly permission: ClaudeCommandPermission
+  /** Continue a previous run's conversation (to answer its questions) */
+  readonly resumeSessionId: string | null
+}
+
+/** Progress of a repository command, streamed to the renderer */
+export type ClaudeCommandEvent =
+  | { readonly kind: 'session'; readonly sessionId: string }
+  | { readonly kind: 'text'; readonly text: string }
+  | {
+      readonly kind: 'tool'
+      readonly id: string
+      readonly name: string
+      readonly summary: string
+    }
+  | {
+      readonly kind: 'tool-result'
+      readonly id: string
+      readonly isError: boolean
+      readonly output: string
+    }
+  | {
+      readonly kind: 'result'
+      readonly isError: boolean
+      readonly text: string
+      readonly durationMs: number | null
+      readonly turns: number | null
+    }
+  | {
+      readonly kind: 'exit'
+      readonly code: number | null
+      readonly error: string | null
+    }

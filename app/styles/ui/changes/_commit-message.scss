@@ -186,7 +186,8 @@
       }
     }
 
-    .ai-generate-button {
+    .ai-generate-button,
+    .ai-review-button {
       // button reset styles
       border: none;
       border-radius: 0px;
@@ -256,6 +257,10 @@
   .commit-merge-main-button {
     max-width: 100%;
     margin-top: var(--spacing-half);
+
+    &.release-button .octicon {
+      color: var(--color-new);
+    }
 
     @include ellipsis;
 

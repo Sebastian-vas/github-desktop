@@ -55,8 +55,17 @@ import {
 import { initializeDesktopNotifications } from './notifications'
 import parseCommandLineArgs from 'minimist'
 import { CLIAction } from '../lib/cli-action'
-import { generateCommitMessageWithAI, resolveConflictWithAI } from './ai'
-import { getClaudeAccountStatus, loginToClaudeAccount } from './claude-code'
+import {
+  generateCommitMessageWithAI,
+  resolveConflictWithAI,
+  reviewChangesWithAI,
+} from './ai'
+import {
+  getClaudeAccountStatus,
+  loginToClaudeAccount,
+  startClaudeCommand,
+  stopClaudeCommand,
+} from './claude-code'
 
 app.setAppLogsPath()
 enableSourceMaps()
@@ -544,11 +553,21 @@ app.on('ready', () => {
     resolveConflictWithAI(request)
   )
 
+  ipcMain.handle('ai-review-changes', async (_, request) =>
+    reviewChangesWithAI(request)
+  )
+
   ipcMain.handle('ai-claude-account-status', async () =>
     getClaudeAccountStatus()
   )
 
   ipcMain.handle('ai-claude-account-login', async () => loginToClaudeAccount())
+
+  ipcMain.handle('claude-command-start', async (event, request) =>
+    startClaudeCommand(request, event.sender)
+  )
+
+  ipcMain.on('claude-command-stop', (_, runId) => stopClaudeCommand(runId))
 
   ipcMain.handle('ai-generate-commit-message', async (_, request) =>
     generateCommitMessageWithAI(request)

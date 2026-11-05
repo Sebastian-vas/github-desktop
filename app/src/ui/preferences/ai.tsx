@@ -23,6 +23,10 @@ interface IAIPreferencesProps {
   readonly language: AIOutputLanguage
   readonly onEnabledChanged: (enabled: boolean) => void
   readonly onProviderChanged: (provider: AIProvider) => void
+  readonly useProjectContext: boolean
+  readonly onUseProjectContextChanged: (value: boolean) => void
+  readonly safePull: boolean
+  readonly onSafePullChanged: (value: boolean) => void
   readonly onApiKeyChanged: (apiKey: string) => void
   readonly onModelChanged: (model: AIModelId) => void
   readonly onLanguageChanged: (language: AIOutputLanguage) => void
@@ -113,6 +117,47 @@ export class AI extends React.Component<
             <option value="en">English</option>
             <option value="es">Español</option>
           </Select>
+        </div>
+
+        <div className="advanced-section">
+          <h2>Project context</h2>
+          <Checkbox
+            label="Follow the project's own instructions"
+            value={
+              this.props.useProjectContext
+                ? CheckboxValue.On
+                : CheckboxValue.Off
+            }
+            onChange={this.onUseProjectContextChanged}
+            disabled={disabled}
+            ariaDescribedBy="ai-project-context-description"
+          />
+          <p
+            id="ai-project-context-description"
+            className="git-settings-description"
+          >
+            Sends the repository's CLAUDE.md, AGENTS.md, review agents and
+            commit conventions along with each request, so reviews, commit
+            messages and conflict resolutions follow the team's rules.
+          </p>
+        </div>
+
+        <div className="advanced-section">
+          <h2>Flows</h2>
+          <Checkbox
+            label="Pull without losing local changes"
+            value={this.props.safePull ? CheckboxValue.On : CheckboxValue.Off}
+            onChange={this.onSafePullChanged}
+            ariaDescribedBy="flows-safe-pull-description"
+          />
+          <p
+            id="flows-safe-pull-description"
+            className="git-settings-description"
+          >
+            The Pull button saves your uncommitted changes, pulls, brings them
+            back (integrating any clash with AI) and tells you what to do next:
+            run migrations, install dependencies, rebuild…
+          </p>
         </div>
       </DialogContent>
     )
@@ -225,6 +270,16 @@ export class AI extends React.Component<
 
   private onEnabledChanged = (event: React.FormEvent<HTMLInputElement>) => {
     this.props.onEnabledChanged(event.currentTarget.checked)
+  }
+
+  private onUseProjectContextChanged = (
+    event: React.FormEvent<HTMLInputElement>
+  ) => {
+    this.props.onUseProjectContextChanged(event.currentTarget.checked)
+  }
+
+  private onSafePullChanged = (event: React.FormEvent<HTMLInputElement>) => {
+    this.props.onSafePullChanged(event.currentTarget.checked)
   }
 
   private onModelChanged = (event: React.FormEvent<HTMLSelectElement>) => {

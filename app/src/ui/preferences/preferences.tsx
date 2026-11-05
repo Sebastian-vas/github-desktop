@@ -148,6 +148,8 @@ interface IPreferencesState {
   readonly canFilterChanges: boolean
   readonly aiEnabled: boolean
   readonly aiProvider: AIProvider
+  readonly aiUseProjectContext: boolean
+  readonly flowsSafePull: boolean
   readonly aiApiKey: string
   readonly initialAIApiKey: string
   readonly aiModel: AIModelId
@@ -217,6 +219,8 @@ export class Preferences extends React.Component<
       initialAIApiKey: '',
       aiEnabled: aiSettings.enabled,
       aiProvider: aiSettings.provider,
+      aiUseProjectContext: aiSettings.useProjectContext,
+      flowsSafePull: aiSettings.safePullButton,
       aiModel: aiSettings.model,
       aiLanguage: aiSettings.language,
     }
@@ -352,7 +356,7 @@ export class Preferences extends React.Component<
             </span>
             <span id={this.getTabId(PreferencesTab.AI)}>
               <Octicon className="icon" symbol={octicons.sparkleFill} />
-              AI
+              AI & Flows
             </span>
           </TabBar>
 
@@ -589,6 +593,10 @@ export class Preferences extends React.Component<
             enabled={this.state.aiEnabled}
             provider={this.state.aiProvider}
             onProviderChanged={this.onAIProviderChanged}
+            useProjectContext={this.state.aiUseProjectContext}
+            onUseProjectContextChanged={this.onAIUseProjectContextChanged}
+            safePull={this.state.flowsSafePull}
+            onSafePullChanged={this.onFlowsSafePullChanged}
             apiKey={this.state.aiApiKey}
             model={this.state.aiModel}
             language={this.state.aiLanguage}
@@ -620,6 +628,14 @@ export class Preferences extends React.Component<
 
   private onAIProviderChanged = (aiProvider: AIProvider) => {
     this.setState({ aiProvider })
+  }
+
+  private onAIUseProjectContextChanged = (aiUseProjectContext: boolean) => {
+    this.setState({ aiUseProjectContext })
+  }
+
+  private onFlowsSafePullChanged = (flowsSafePull: boolean) => {
+    this.setState({ flowsSafePull })
   }
 
   private onAIApiKeyChanged = (aiApiKey: string) => {
@@ -849,6 +865,8 @@ export class Preferences extends React.Component<
     setAISettings({
       enabled: this.state.aiEnabled,
       provider: this.state.aiProvider,
+      useProjectContext: this.state.aiUseProjectContext,
+      safePullButton: this.state.flowsSafePull,
       model: this.state.aiModel,
       language: this.state.aiLanguage,
     })

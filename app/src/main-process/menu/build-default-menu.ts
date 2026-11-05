@@ -473,6 +473,45 @@ export function buildDefaultMenu({
     submenu: branchSubmenu,
   })
 
+  template.push({
+    label: __DARWIN__ ? 'Flows' : 'F&lows',
+    id: 'flows',
+    submenu: [
+      {
+        label: __DARWIN__
+          ? 'Pull Without Losing Changes'
+          : 'Pull without losing changes',
+        id: 'flows-safe-pull',
+        click: emit('flows-safe-pull'),
+      },
+      {
+        label: __DARWIN__
+          ? 'Commit, Merge into Main & Push…'
+          : 'Commit, merge into main & push…',
+        id: 'flows-commit-merge-main',
+        click: emit('flows-commit-merge-main'),
+      },
+      {
+        label: __DARWIN__ ? 'Release to Production…' : 'Release to production…',
+        id: 'flows-release-production',
+        click: emit('flows-release-production'),
+      },
+      separator,
+      {
+        label: __DARWIN__ ? 'Review Changes with AI' : 'Review changes with AI',
+        id: 'flows-ai-review',
+        accelerator: 'CmdOrCtrl+Shift+K',
+        click: emit('flows-ai-review'),
+      },
+      {
+        label: __DARWIN__ ? 'Repository Commands…' : 'Repository commands…',
+        id: 'flows-repo-commands',
+        accelerator: 'CmdOrCtrl+Shift+J',
+        click: emit('flows-repo-commands'),
+      },
+    ],
+  })
+
   if (__DARWIN__) {
     template.push({
       role: 'window',

@@ -1,0 +1,558 @@
+@import '../../mixins';
+
+// Shared look of the flow dialogs (commit · merge into main, release to
+// production, safe pull) and of the AI review and repository commands
+// dialogs.
+
+@mixin tinted($color) {
+  border: 1px solid color-mix(in srgb, #{$color} 45%, transparent);
+  background: color-mix(in srgb, #{$color} 10%, transparent);
+
+  > .octicon {
+    color: $color;
+  }
+}
+
+.git-flow-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing);
+
+  .octicon {
+    color: var(--link-button-color);
+  }
+}
+
+.git-flow-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing);
+  padding: var(--spacing);
+  border-radius: var(--border-radius);
+  margin-bottom: var(--spacing);
+  user-select: text;
+
+  > .octicon {
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  &.success {
+    @include tinted(var(--color-new));
+  }
+
+  &.error {
+    @include tinted(var(--color-deleted));
+  }
+
+  &.warning {
+    @include tinted(var(--color-modified));
+  }
+
+  &.info {
+    @include tinted(var(--link-button-color));
+  }
+}
+
+.git-flow-note {
+  color: var(--text-secondary-color);
+  font-size: var(--font-size-sm);
+  margin: var(--spacing) 0 0;
+}
+
+dialog.git-flow-dialog {
+  width: 560px;
+  max-width: calc(100vw - var(--spacing-double) * 2);
+
+  p {
+    margin: 0 0 var(--spacing);
+  }
+
+  // ------------------------------------------------------------- confirm
+
+  .git-flow-branch-path {
+    margin-bottom: var(--spacing-double);
+
+    .branch-path-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--spacing);
+    }
+
+    .branch-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--spacing-half);
+      padding: 2px var(--spacing);
+      border: var(--base-border);
+      border-radius: 999px;
+      background: var(--box-alt-background-color);
+      font-family: var(--font-family-monospace);
+      font-size: var(--font-size-sm);
+      max-width: 220px;
+      @include ellipsis;
+
+      .octicon {
+        flex-shrink: 0;
+        color: var(--text-secondary-color);
+      }
+
+      &.target {
+        @include tinted(var(--link-button-color));
+        font-weight: var(--font-weight-semibold);
+
+        .octicon {
+          color: var(--link-button-color);
+        }
+      }
+    }
+
+    .arrow {
+      color: var(--text-secondary-color);
+    }
+
+    .branch-path-caption {
+      margin-top: var(--spacing-half);
+      color: var(--text-secondary-color);
+      font-size: var(--font-size-sm);
+    }
+  }
+
+  .git-flow-plan {
+    margin: 0 0 var(--spacing);
+    padding-left: var(--spacing-double);
+
+    li {
+      margin-bottom: var(--spacing-half);
+    }
+  }
+
+  .release-preview {
+    margin: var(--spacing) 0;
+    padding: var(--spacing);
+    border: var(--base-border);
+    border-radius: var(--border-radius);
+    background: var(--box-alt-background-color);
+
+    &.loading {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing);
+      color: var(--text-secondary-color);
+    }
+
+    .release-preview-title {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-half);
+      margin-bottom: var(--spacing-half);
+
+      .octicon {
+        color: var(--color-new);
+      }
+    }
+
+    ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      max-height: 180px;
+      overflow-y: auto;
+      user-select: text;
+    }
+
+    li {
+      padding: 2px 0;
+      @include ellipsis;
+
+      code {
+        margin-right: var(--spacing-half);
+        color: var(--text-secondary-color);
+      }
+
+      &.new-commit code {
+        color: var(--color-new);
+      }
+    }
+
+    .muted {
+      color: var(--text-secondary-color);
+    }
+  }
+
+  // ------------------------------------------------------------ progress
+
+  .git-flow-progress {
+    margin-bottom: var(--spacing);
+
+    .git-flow-progress-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: var(--font-size-sm);
+      color: var(--text-secondary-color);
+      margin-bottom: var(--spacing-half);
+    }
+
+    .git-flow-progress-bar {
+      height: 4px;
+      border-radius: 2px;
+      background: var(--box-alt-background-color);
+      overflow: hidden;
+
+      > div {
+        height: 100%;
+        background: var(--color-new);
+        transition: width 0.3s ease;
+      }
+    }
+
+    &.failed .git-flow-progress-bar > div {
+      background: var(--color-deleted);
+    }
+  }
+
+  .git-flow-steps {
+    list-style: none;
+    margin: 0 0 var(--spacing);
+    padding: 0;
+
+    .step {
+      position: relative;
+      display: flex;
+      align-items: flex-start;
+      gap: var(--spacing);
+      padding: 5px 0;
+
+      // The line linking the steps
+      &:not(:last-child)::after {
+        content: '';
+        position: absolute;
+        left: 7px;
+        top: 23px;
+        bottom: -5px;
+        width: 2px;
+        background: var(--box-border-color);
+      }
+
+      &.step-done:not(:last-child)::after {
+        background: color-mix(in srgb, var(--color-new) 50%, transparent);
+      }
+    }
+
+    .step-icon {
+      flex: 0 0 16px;
+      display: flex;
+      justify-content: center;
+      padding-top: 1px;
+      position: relative;
+      z-index: 1;
+      background: var(--background-color);
+    }
+
+    .step-text {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .step-detail {
+      color: var(--text-secondary-color);
+      font-size: var(--font-size-sm);
+      user-select: text;
+      word-break: break-word;
+    }
+
+    .step-pending {
+      .step-title,
+      .step-icon {
+        color: var(--text-secondary-color);
+      }
+    }
+
+    .step-running .step-title {
+      font-weight: var(--font-weight-semibold);
+    }
+
+    .step-skipped {
+      .step-title {
+        color: var(--text-secondary-color);
+      }
+
+      .step-icon {
+        color: var(--text-secondary-color);
+      }
+    }
+
+    .step-done .step-icon {
+      color: var(--color-new);
+    }
+
+    .step-failed {
+      .step-icon,
+      .step-detail {
+        color: var(--color-deleted);
+      }
+    }
+  }
+
+  // ----------------------------------------------------------- conflicts
+
+  .git-flow-sides {
+    font-size: var(--font-size-sm);
+    margin-top: 2px;
+  }
+
+  .resolve-all-with-ai {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--spacing);
+    margin-bottom: var(--spacing);
+
+    .ai-hint {
+      color: var(--text-secondary-color);
+      font-size: var(--font-size-sm);
+    }
+  }
+
+  .ai-button .octicon {
+    margin-right: var(--spacing-half);
+    color: var(--link-button-color);
+  }
+
+  .git-flow-conflict-list {
+    list-style: none;
+    margin: 0 0 var(--spacing);
+    padding: 0;
+    max-height: 240px;
+    overflow-y: auto;
+    border: var(--base-border);
+    border-radius: var(--border-radius);
+
+    li {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing);
+      padding: var(--spacing-half) var(--spacing);
+      min-width: 0;
+
+      &:not(:last-child) {
+        border-bottom: var(--base-border);
+      }
+
+      .conflict-icon {
+        flex-shrink: 0;
+        color: var(--color-conflicted);
+      }
+
+      .path-text-component {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+
+      .action-buttons {
+        display: flex;
+        gap: var(--spacing-half);
+        flex-shrink: 0;
+
+        .octicon {
+          margin-right: var(--spacing-half);
+        }
+      }
+    }
+  }
+
+  .ai-conflict-proposal {
+    h3 {
+      font-size: var(--font-size);
+      font-weight: var(--font-weight-semibold);
+      margin: var(--spacing-double) 0 var(--spacing-half);
+    }
+
+    .ai-proposal-header {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing);
+      min-width: 0;
+
+      > .octicon {
+        color: var(--link-button-color);
+      }
+
+      .path-text-component {
+        flex: 1 1 auto;
+        min-width: 0;
+        font-weight: var(--font-weight-semibold);
+      }
+    }
+
+    .ai-queue-status {
+      margin-top: var(--spacing-half);
+      color: var(--text-secondary-color);
+      font-size: var(--font-size-sm);
+    }
+
+    .ai-confidence {
+      flex-shrink: 0;
+      font-size: var(--font-size-sm);
+      padding: 1px var(--spacing);
+      border-radius: 999px;
+
+      &.ai-confidence-high {
+        @include tinted(var(--color-new));
+      }
+
+      &.ai-confidence-medium {
+        @include tinted(var(--color-modified));
+      }
+
+      &.ai-confidence-low {
+        @include tinted(var(--color-deleted));
+      }
+    }
+
+    .ai-explanation {
+      white-space: pre-wrap;
+      user-select: text;
+    }
+
+    .ai-resolved-contents {
+      margin: 0;
+      max-height: 260px;
+      overflow: auto;
+      padding: var(--spacing);
+      border: var(--base-border);
+      border-radius: var(--border-radius);
+      background: var(--box-alt-background-color);
+      font-family: var(--font-family-monospace);
+      font-size: var(--font-size-sm);
+      white-space: pre;
+      user-select: text;
+    }
+  }
+
+  // -------------------------------------------------------------- result
+
+  .git-flow-elapsed {
+    color: var(--text-secondary-color);
+    font-size: var(--font-size-sm);
+  }
+
+  .git-flow-result-text {
+    margin-top: 2px;
+    word-break: break-word;
+  }
+
+  .git-flow-section-title {
+    font-size: var(--font-size);
+    font-weight: var(--font-weight-semibold);
+    margin: var(--spacing-double) 0 var(--spacing);
+  }
+
+  .flow-notes {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-half);
+  }
+
+  .flow-note {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing);
+    padding: var(--spacing);
+    border: var(--base-border);
+    border-radius: var(--border-radius);
+    background: var(--box-alt-background-color);
+
+    .flow-note-icon {
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    &.flow-note-action .flow-note-icon {
+      color: var(--color-modified);
+    }
+
+    &.flow-note-warning .flow-note-icon {
+      color: var(--color-deleted);
+    }
+
+    &.flow-note-info .flow-note-icon {
+      color: var(--link-button-color);
+    }
+
+    .flow-note-body {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .flow-note-title {
+      font-weight: var(--font-weight-semibold);
+    }
+
+    .flow-note-detail {
+      color: var(--text-secondary-color);
+      font-size: var(--font-size-sm);
+      word-break: break-word;
+      user-select: text;
+    }
+
+    .flow-note-command {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-half);
+      margin-top: var(--spacing-half);
+
+      code {
+        padding: 2px var(--spacing-half);
+        border-radius: var(--border-radius);
+        background: var(--background-color);
+        border: var(--base-border);
+        user-select: text;
+      }
+    }
+  }
+
+  .git-flow-commits {
+    margin-top: var(--spacing);
+
+    summary {
+      cursor: pointer;
+      color: var(--text-secondary-color);
+    }
+
+    ul {
+      list-style: none;
+      margin: var(--spacing-half) 0 0;
+      padding: 0;
+      max-height: 180px;
+      overflow-y: auto;
+      user-select: text;
+    }
+
+    li {
+      padding: 2px 0;
+      @include ellipsis;
+
+      code {
+        color: var(--text-secondary-color);
+        margin-right: var(--spacing-half);
+      }
+    }
+  }
+}
+
+// The Flows button in the toolbar
+.flows-toolbar-button {
+  width: auto;
+  min-width: 140px;
+  flex-shrink: 0;
+
+  .icon {
+    color: var(--link-button-color);
+  }
+}

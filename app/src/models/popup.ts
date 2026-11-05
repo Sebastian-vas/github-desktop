@@ -98,6 +98,10 @@ export enum PopupType {
   ConfirmCommitFilteredChanges = 'ConfirmCommitFilteredChanges',
   ConfirmRestart = 'ConfirmRestart',
   CommitMergeMain = 'CommitMergeMain',
+  ReleaseToProduction = 'ReleaseToProduction',
+  SafePull = 'SafePull',
+  AIReview = 'AIReview',
+  RepoCommands = 'RepoCommands',
 }
 
 interface IBasePopup {
@@ -440,6 +444,30 @@ export type PopupDetail =
       commitContext: ICommitContext | null
       filesToCommitCount: number
       onCommitCreated?: () => void
+    }
+  | {
+      type: PopupType.ReleaseToProduction
+      repository: Repository
+      mainBranch: string
+      commitContext: ICommitContext | null
+      filesToCommitCount: number
+      onCommitCreated?: () => void
+    }
+  | {
+      type: PopupType.SafePull
+      repository: Repository
+      branch: string
+    }
+  | {
+      type: PopupType.AIReview
+      repository: Repository
+      files: ReadonlyArray<WorkingDirectoryFileChange>
+      branch: string | null
+    }
+  | {
+      type: PopupType.RepoCommands
+      repository: Repository
+      initialCommand?: string
     }
 
 export type Popup = IBasePopup & PopupDetail

@@ -7,13 +7,19 @@ import {
   AppFileStatusKind,
   WorkingDirectoryFileChange,
 } from '../../models/status'
-import { getAIRequestOptions } from './settings'
+import { getAIRequestOptions, getAISettings } from './settings'
+import {
+  readCommitConventions,
+  readProjectGuidelines,
+  readReviewContext,
+} from './project-context'
 import {
   AIConfidence,
   AIResult,
   IAICommitMessage,
   IAIConflictHunk,
   IAIConflictResolution,
+  IAIReview,
 } from './types'
 import {
   applyConflictResolutions,
@@ -46,6 +52,16 @@ const MaxConcurrentRequests = 4
  * Larger change sets are abbreviated to fit, never rejected.
  */
 const MaxCommitDiffLength = 120_000
+
+/** Budget of project instructions sent with each conflict batch */
+const ConflictProjectContextLength = 20_000
+
+/** Budget of commit conventions sent to write a commit message */
+const CommitConventionsLength = 15_000
+
+/** Budgets for reviewing changes, which deserve the most context */
+const ReviewDiffLength = 150_000
+const ReviewProjectContextLength = 200_000
 
 /** Untracked files beyond this count are listed without their contents */
 const MaxUntrackedFileDiffs = 300
@@ -221,6 +237,10 @@ export async function proposeAIConflictResolution(
       : null
 
   const options = await getAIRequestOptions()
+  const projectContext = getAISettings().useProjectContext
+    ? (await readProjectGuidelines(repository, ConflictProjectContextLength))
+        .text || null
+    : null
   const results = await Promise.all(
     batches.map(batch =>
       limitAIRequests(() =>
@@ -231,6 +251,7 @@ export async function proposeAIConflictResolution(
           hunks: batch,
           ourBranch: ourBranch ?? null,
           theirBranch: theirBranch ?? null,
+          projectContext,
         })
       )
     )
@@ -557,10 +578,78 @@ export async function generateAICommitMessage(
   diff = compactDiff(diff, MaxCommitDiffLength)
 
   const options = await getAIRequestOptions()
+  const projectContext = getAISettings().useProjectContext
+    ? (await readCommitConventions(repository, CommitConventionsLength)).text ||
+      null
+    : null
+
   return invoke('ai-generate-commit-message', {
     ...options,
     diff,
     branch,
     summaryHint,
+    projectContext,
   })
+}
+
+export interface IAIReviewResult {
+  readonly review: IAIReview
+  /** The project files the change was checked against */
+  readonly sources: ReadonlyArray<string>
+  readonly fileCount: number
+}
+
+/**
+ * Reviews the changes in the given files against the project's own rules
+ * (CLAUDE.md, AGENTS.md, review agents…) and for bugs, before committing.
+ */
+export async function reviewAIChanges(
+  repository: Repository,
+  files: ReadonlyArray<WorkingDirectoryFileChange>,
+  branch: string | null
+): Promise<AIResult<IAIReviewResult>> {
+  if (files.length === 0) {
+    return {
+      kind: 'error',
+      message: 'Select at least one changed file to review.',
+    }
+  }
+
+  let diff: string
+  try {
+    diff = await getDiffForFiles(repository, files)
+  } catch (e) {
+    return { kind: 'error', message: `Could not compute the diff: ${e}` }
+  }
+
+  if (diff.trim().length === 0) {
+    return {
+      kind: 'error',
+      message: 'There are no changes in the selected files to review.',
+    }
+  }
+
+  const context = getAISettings().useProjectContext
+    ? await readReviewContext(repository, ReviewProjectContextLength)
+    : { sources: [], text: '' }
+
+  const options = await getAIRequestOptions()
+  const result = await invoke('ai-review-changes', {
+    ...options,
+    diff: compactDiff(diff, ReviewDiffLength),
+    branch,
+    projectContext: context.text.length > 0 ? context.text : null,
+  })
+
+  if (result.kind === 'error') {
+    return result
+  }
+  return {
+    kind: 'success',
+    value: {
+      review: result.value,
+      sources: context.sources,
+      fileCount: files.length,
+    },
+  }
 }

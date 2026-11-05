@@ -961,6 +961,40 @@ export class CommitMessage extends React.Component<
     )
   }
 
+  private renderAIReviewButton() {
+    if (!this.isAIGenerationEnabled) {
+      return null
+    }
+
+    const label = 'Review the selected changes with AI before committing'
+    return (
+      <Button
+        className="ai-review-button"
+        onClick={this.onReviewWithAI}
+        ariaLabel={label}
+        tooltip={label}
+        disabled={
+          this.props.isCommitting === true || !this.props.anyFilesSelected
+        }
+      >
+        <Octicon symbol={octicons.shieldCheck} />
+      </Button>
+    )
+  }
+
+  private onReviewWithAI = () => {
+    const { filesToCommit, repository, branch } = this.props
+    if (filesToCommit === undefined || filesToCommit.length === 0) {
+      return
+    }
+    this.props.onShowPopup({
+      type: PopupType.AIReview,
+      repository,
+      files: filesToCommit,
+      branch,
+    })
+  }
+
   private renderAIError() {
     if (this.state.aiError === null) {
       return null
@@ -991,6 +1025,7 @@ export class CommitMessage extends React.Component<
       <div className={className}>
         {this.renderCoAuthorToggleButton()}
         {this.renderAIGenerateButton()}
+        {this.renderAIReviewButton()}
       </div>
     )
   }
@@ -1366,10 +1401,13 @@ export class CommitMessage extends React.Component<
       mainBranchName === undefined ||
       mainBranchName === null ||
       branch === null ||
-      branch === mainBranchName ||
       commitToAmend !== null
     ) {
       return null
+    }
+
+    if (branch === mainBranchName) {
+      return this.renderReleaseButton()
     }
 
     const needsSummary =
@@ -1394,6 +1432,60 @@ export class CommitMessage extends React.Component<
         {`Commit, merge into ${mainBranchName} & push`}
       </Button>
     )
+  }
+
+  /** On the main branch, the flow button releases to production instead */
+  private renderReleaseButton() {
+    const { isCommitting, anyFilesSelected } = this.props
+    const needsSummary =
+      anyFilesSelected && isEmptyOrWhitespace(this.state.summary)
+    const disabled =
+      isCommitting === true ||
+      needsSummary ||
+      (anyFilesSelected && this.hasRepoRuleFailure())
+
+    const tooltip = needsSummary
+      ? 'Write a commit summary first'
+      : anyFilesSelected
+      ? 'Commit the selected changes, push them and release the main branch to production'
+      : 'Release the main branch to production'
+
+    return (
+      <Button
+        className="commit-merge-main-button release-button"
+        onClick={this.onReleaseToProduction}
+        disabled={disabled}
+        tooltip={tooltip}
+      >
+        <Octicon symbol={octicons.rocket} />
+        {anyFilesSelected
+          ? 'Commit & release to production'
+          : 'Release to production'}
+      </Button>
+    )
+  }
+
+  private onReleaseToProduction = () => {
+    const { mainBranchName, repository, anyFilesSelected } = this.props
+    if (!mainBranchName) {
+      return
+    }
+
+    this.props.onShowPopup({
+      type: PopupType.ReleaseToProduction,
+      repository,
+      mainBranch: mainBranchName,
+      commitContext: anyFilesSelected
+        ? {
+            summary: this.state.summary.trim(),
+            description: this.state.description,
+            trailers: this.getCoAuthorTrailers(),
+            amend: false,
+          }
+        : null,
+      filesToCommitCount: this.props.filesToCommit?.length ?? 0,
+      onCommitCreated: this.onCommitMergeMainCommitCreated,
+    })
   }
 
   private onCommitMergeMain = () => {

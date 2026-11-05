@@ -15,6 +15,8 @@ const enabledKey = 'ai-features-enabled'
 const modelKey = 'ai-model'
 const languageKey = 'ai-output-language'
 const providerKey = 'ai-provider'
+const projectContextKey = 'ai-use-project-context'
+const safePullKey = 'flows-safe-pull-button'
 
 /** The keychain entry the Anthropic API key is stored under */
 const apiKeyKeychainService = getKeyForEndpoint('https://api.anthropic.com')
@@ -23,6 +25,10 @@ const apiKeyKeychainLogin = 'anthropic-api-key'
 export interface IAISettings {
   readonly enabled: boolean
   readonly provider: AIProvider
+  /** Give the AI the project's own instructions (CLAUDE.md, commit skill…) */
+  readonly useProjectContext: boolean
+  /** The toolbar's Pull runs the safe pull flow */
+  readonly safePullButton: boolean
   readonly model: AIModelId
   readonly language: AIOutputLanguage
 }
@@ -38,6 +44,8 @@ export function getAISettings(): IAISettings {
 
   return {
     enabled: getBoolean(enabledKey, false),
+    useProjectContext: getBoolean(projectContextKey, true),
+    safePullButton: getBoolean(safePullKey, true),
     provider:
       provider === 'api-key' || provider === 'claude-account'
         ? provider
@@ -50,6 +58,8 @@ export function getAISettings(): IAISettings {
 export function setAISettings(settings: IAISettings) {
   setBoolean(enabledKey, settings.enabled)
   localStorage.setItem(providerKey, settings.provider)
+  setBoolean(projectContextKey, settings.useProjectContext)
+  setBoolean(safePullKey, settings.safePullButton)
   localStorage.setItem(modelKey, settings.model)
   localStorage.setItem(languageKey, settings.language)
 }

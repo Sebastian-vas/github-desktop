@@ -23,7 +23,11 @@ import {
   IAICommitMessage,
   IAICommitMessageRequest,
   IAIHunkResolutions,
+  IAIReview,
+  IAIReviewRequest,
   IClaudeAccountStatus,
+  ClaudeCommandEvent,
+  IClaudeCommandRequest,
   IAIConflictResolutionRequest,
 } from './ai/types'
 
@@ -34,6 +38,8 @@ import {
  * the two over the untyped IPC framework.
  */
 export type RequestChannels = {
+  'claude-command-event': (runId: string, event: ClaudeCommandEvent) => void
+  'claude-command-stop': (runId: string) => void
   'select-all-window-contents': () => void
   'dialog-did-open': () => void
   'update-menu-state': (
@@ -151,6 +157,12 @@ export type RequestResponseChannels = {
   'ai-generate-commit-message': (
     request: IAICommitMessageRequest
   ) => Promise<AIResult<IAICommitMessage>>
+  'ai-review-changes': (
+    request: IAIReviewRequest
+  ) => Promise<AIResult<IAIReview>>
   'ai-claude-account-status': () => Promise<IClaudeAccountStatus>
+  'claude-command-start': (
+    request: IClaudeCommandRequest
+  ) => Promise<AIResult<null>>
   'ai-claude-account-login': () => Promise<IClaudeAccountStatus>
 }

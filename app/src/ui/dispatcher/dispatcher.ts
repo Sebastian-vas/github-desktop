@@ -47,6 +47,7 @@ import {
 } from '../../lib/repository-matching'
 import { Shell } from '../../lib/shells'
 import { ILaunchStats, StatsStore } from '../../lib/stats'
+import { getAISettings } from '../../lib/ai/settings'
 import { AppStore } from '../../lib/stores/app-store'
 import { RepositoryStateCache } from '../../lib/stores/repository-state-cache'
 import { getTipSha } from '../../lib/tip'
@@ -724,6 +725,23 @@ export class Dispatcher {
   /** Pull the current branch. */
   public pull(repository: Repository): Promise<void> {
     return this.appStore._pull(repository)
+  }
+
+  /**
+   * What the Pull buttons do: the safe pull flow (stash, pull, bring the
+   * changes back, say what's next) when it's enabled, a regular pull
+   * otherwise.
+   */
+  public pullFromUI(repository: Repository): Promise<void> {
+    const tip = this.repositoryStateManager.get(repository).branchesState.tip
+    if (getAISettings().safePullButton && tip.kind === TipState.Valid) {
+      return this.showPopup({
+        type: PopupType.SafePull,
+        repository,
+        branch: tip.branch.name,
+      })
+    }
+    return this.pull(repository)
   }
 
   /** Fetch a specific refspec for the repository. */
