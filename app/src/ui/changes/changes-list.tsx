@@ -224,6 +224,9 @@ interface IChangesListProps {
   readonly showCommitLengthWarning: boolean
 
   readonly accounts: ReadonlyArray<Account>
+
+  /** The repository's main (default) branch, if known */
+  readonly mainBranchName: string | null
 }
 
 interface IChangesState {
@@ -862,6 +865,7 @@ export class ChangesList extends React.Component<
         onShowCreateForkDialog={this.onShowCreateForkDialog}
         accounts={this.props.accounts}
         filesToCommit={filesSelected}
+        mainBranchName={this.props.mainBranchName}
       />
     )
   }

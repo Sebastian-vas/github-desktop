@@ -97,6 +97,7 @@ export enum PopupType {
   TestIcons = 'TestIcons',
   ConfirmCommitFilteredChanges = 'ConfirmCommitFilteredChanges',
   ConfirmRestart = 'ConfirmRestart',
+  CommitMergeMain = 'CommitMergeMain',
 }
 
 interface IBasePopup {
@@ -431,5 +432,14 @@ export type PopupDetail =
       onClearFilter: () => void
     }
   | { type: PopupType.ConfirmRestart }
+  | {
+      type: PopupType.CommitMergeMain
+      repository: Repository
+      branch: string
+      mainBranch: string
+      commitContext: ICommitContext | null
+      filesToCommitCount: number
+      onCommitCreated?: () => void
+    }
 
 export type Popup = IBasePopup & PopupDetail

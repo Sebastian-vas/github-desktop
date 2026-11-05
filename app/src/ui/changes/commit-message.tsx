@@ -182,6 +182,12 @@ interface ICommitMessageProps {
    * message with AI is shown.
    */
   readonly filesToCommit?: ReadonlyArray<WorkingDirectoryFileChange>
+
+  /**
+   * The repository's main branch. When provided, a "Commit, merge into main &
+   * push" button is shown while on any other branch.
+   */
+  readonly mainBranchName?: string | null
 }
 
 interface ICommitMessageState {
@@ -1354,6 +1360,73 @@ export class CommitMessage extends React.Component<
     )
   }
 
+  private renderCommitMergeMainButton() {
+    const { mainBranchName, branch, isCommitting, commitToAmend } = this.props
+    if (
+      mainBranchName === undefined ||
+      mainBranchName === null ||
+      branch === null ||
+      branch === mainBranchName ||
+      commitToAmend !== null
+    ) {
+      return null
+    }
+
+    const needsSummary =
+      this.props.anyFilesSelected && isEmptyOrWhitespace(this.state.summary)
+    const disabled =
+      isCommitting === true ||
+      needsSummary ||
+      (this.props.anyFilesSelected && this.hasRepoRuleFailure())
+
+    const tooltip = needsSummary
+      ? 'Write a commit summary first'
+      : `Commit the selected changes, merge ${mainBranchName} into ${branch}, push it, then merge ${branch} into ${mainBranchName} and push it`
+
+    return (
+      <Button
+        className="commit-merge-main-button"
+        onClick={this.onCommitMergeMain}
+        disabled={disabled}
+        tooltip={tooltip}
+      >
+        <Octicon symbol={octicons.gitMerge} />
+        {`Commit, merge into ${mainBranchName} & push`}
+      </Button>
+    )
+  }
+
+  private onCommitMergeMain = () => {
+    const { mainBranchName, branch, repository, anyFilesSelected } = this.props
+    if (!mainBranchName || branch === null) {
+      return
+    }
+
+    const commitContext = anyFilesSelected
+      ? {
+          summary: this.state.summary.trim(),
+          description: this.state.description,
+          trailers: this.getCoAuthorTrailers(),
+          amend: false,
+        }
+      : null
+
+    this.props.onShowPopup({
+      type: PopupType.CommitMergeMain,
+      repository,
+      branch,
+      mainBranch: mainBranchName,
+      commitContext,
+      filesToCommitCount: this.props.filesToCommit?.length ?? 0,
+      onCommitCreated: this.onCommitMergeMainCommitCreated,
+    })
+  }
+
+  private onCommitMergeMainCommitCreated = () => {
+    this.props.onSuccessfulCommitCreated?.()
+    this.clearCommitMessage()
+  }
+
   private renderSummaryLengthHint(): JSX.Element | null {
     return (
       <ToggledtippedContent
@@ -1524,6 +1597,7 @@ export class CommitMessage extends React.Component<
         {this.renderBranchProtectionsRepoRulesCommitWarning()}
 
         {this.renderSubmitButton()}
+        {this.renderCommitMergeMainButton()}
         <span className="sr-only" aria-live="polite" aria-atomic="true">
           {this.state.isCommittingStatusMessage}
         </span>

@@ -71,6 +71,7 @@ import { Welcome } from './welcome'
 import { AppMenuBar } from './app-menu'
 import { UpdateAvailable, renderBanner } from './banners'
 import { Preferences } from './preferences'
+import { CommitMergeMainDialog } from './commit-merge-main/commit-merge-main-dialog'
 import { ConfirmRestart } from './preferences/confirm-restart'
 import { RepositorySettings } from './repository-settings'
 import { AppError } from './app-error'
@@ -2488,6 +2489,22 @@ export class App extends React.Component<IAppProps, IAppState> {
       case PopupType.ConfirmRestart: {
         return <ConfirmRestart onDismissed={onPopupDismissedFn} />
       }
+      case PopupType.CommitMergeMain:
+        return (
+          <CommitMergeMainDialog
+            key="commit-merge-main"
+            dispatcher={this.props.dispatcher}
+            repository={popup.repository}
+            branch={popup.branch}
+            mainBranch={popup.mainBranch}
+            commitContext={popup.commitContext}
+            filesToCommitCount={popup.filesToCommitCount}
+            onCommitCreated={popup.onCommitCreated}
+            resolvedExternalEditor={this.state.resolvedExternalEditor}
+            openFileInExternalEditor={this.openFileInExternalEditor}
+            onDismissed={onPopupDismissedFn}
+          />
+        )
       default:
         return assertNever(popup, `Unknown popup type: ${popup}`)
     }

@@ -235,6 +235,10 @@ export class RepositoryView extends React.Component<
     return (
       <ChangesSidebar
         ref={this.changesSidebarRef}
+        mainBranchName={
+          this.props.state.branchesState.defaultBranch?.nameWithoutRemote ??
+          null
+        }
         repository={this.props.repository}
         dispatcher={this.props.dispatcher}
         changes={this.props.state.changesState}

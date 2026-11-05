@@ -49,6 +49,8 @@ interface IChangesSidebarProps {
   readonly dispatcher: Dispatcher
   readonly commitAuthor: CommitIdentity | null
   readonly branch: string | null
+  /** The repository's main (default) branch, if known */
+  readonly mainBranchName: string | null
   readonly emoji: Map<string, Emoji>
   readonly mostRecentLocalCommit: Commit | null
   // Used in receiveProps, no-unused-prop-types doesn't know that
@@ -458,6 +460,7 @@ export class ChangesSidebar extends React.Component<IChangesSidebarProps, {}> {
           currentRepoRulesInfo={currentRepoRulesInfo}
           aheadBehind={this.props.aheadBehind}
           accounts={this.props.accounts}
+          mainBranchName={this.props.mainBranchName}
         />
         {this.renderUndoCommit(rebaseConflictState)}
       </div>

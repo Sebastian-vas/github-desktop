@@ -9,9 +9,11 @@ import {
 } from '../../models/status'
 import { getAIRequestOptions } from './settings'
 import { AIResult, IAICommitMessage, IAIConflictResolution } from './types'
+import { hasConflictMarkers } from '../conflict-markers'
 
 export * from './types'
 export * from './settings'
+export { hasConflictMarkers } from '../conflict-markers'
 
 /**
  * Largest file (in characters) we'll send to Claude for conflict resolution.
@@ -25,13 +27,6 @@ const MaxCommitDiffLength = 500_000
 
 /** Hash of the empty tree, the diff base in repositories without commits */
 const EmptyTreeHash = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
-
-const conflictMarkerRegex = /^(<{7}|={7}|>{7}|\|{7})(\s|$)/m
-
-/** Returns true if the text still contains Git conflict markers */
-export function hasConflictMarkers(text: string) {
-  return conflictMarkerRegex.test(text)
-}
 
 function usesCRLF(text: string) {
   const crlf = (text.match(/\r\n/g) || []).length
