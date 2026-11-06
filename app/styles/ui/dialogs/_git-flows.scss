@@ -546,11 +546,16 @@ dialog.git-flow-dialog {
   }
 }
 
-// The Flows dropdown in the toolbar
-.flows-toolbar-button {
-  width: 190px;
-  flex-shrink: 0;
+// The Flows dropdown in the toolbar. Desktop makes every resizable
+// dropdown grow to fill the toolbar (the branch and push/pull buttons sit in
+// fixed-width wrappers); this one keeps a fixed width like them.
+#desktop-app-toolbar .toolbar-dropdown.flows-toolbar-button {
+  flex: 0 0 auto;
+  width: 200px;
+  max-width: 200px;
+}
 
+.flows-toolbar-button {
   > .toolbar-dropdown > .toolbar-button > button > .icon,
   .toolbar-button .icon {
     color: var(--link-button-color);
