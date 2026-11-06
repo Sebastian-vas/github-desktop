@@ -7,6 +7,11 @@ import { GitFlowOutcome } from '../../src/lib/git-flows/flow-run'
 import { ReleaseToProductionRun } from '../../src/lib/git-flows/release-to-production'
 import { SafePullRun } from '../../src/lib/git-flows/safe-pull'
 import {
+  getRemoteBranchNames,
+  guessProductionBranch,
+} from '../../src/lib/git-flows/production-branch'
+import { Branch, BranchType } from '../../src/models/branch'
+import {
   getAfterPullNotes,
   matchesAnyGlob,
 } from '../../src/lib/git-flows/after-pull'
@@ -287,5 +292,33 @@ describe('after pull rules', () => {
       replaceDefaultAfterPull: true,
     })
     expect(replaced).toHaveLength(0)
+  })
+})
+
+describe('production branch detection', () => {
+  const tip = { sha: 'abc', author: {} as any }
+  const local = (name: string, upstream: string | null) =>
+    new Branch(name, upstream, tip, BranchType.Local, `refs/heads/${name}`)
+  const remote = (name: string) =>
+    new Branch(name, null, tip, BranchType.Remote, `refs/remotes/${name}`)
+
+  it('finds production even when a local branch tracks it', () => {
+    // Desktop drops origin/prod from its list when a local prod tracks it
+    const branches = [
+      local('main', 'origin/main'),
+      local('prod', 'origin/prod'),
+      local('sebastian', 'origin/sebastian'),
+      remote('origin/mydev'),
+    ]
+    const names = getRemoteBranchNames(branches)
+    expect([...names].sort()).toEqual(['main', 'mydev', 'prod', 'sebastian'])
+    const repository = new Repository('/tmp/prod-test', -1, null, false)
+    expect(guessProductionBranch(repository, names, 'main')).toBe('prod')
+  })
+
+  it('finds nothing when there is no production branch', () => {
+    const repository = new Repository('/tmp/no-prod-test', -1, null, false)
+    const names = getRemoteBranchNames([local('linux', 'origin/linux')])
+    expect(guessProductionBranch(repository, names, 'linux')).toBeNull()
   })
 })

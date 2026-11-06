@@ -1,5 +1,6 @@
 import { git } from '../git/core'
 import { Repository } from '../../models/repository'
+import { Branch, BranchType } from '../../models/branch'
 import { readRepositoryFlowsConfig } from './after-pull'
 
 const storageKey = (repository: Repository) =>
@@ -135,4 +136,23 @@ export function guessProductionBranch(
     return saved
   }
   return LikelyProductionNames.find(n => candidates.includes(n)) ?? null
+}
+
+/**
+ * Names (without the remote prefix) of the branches the remote has, from
+ * Desktop's branch list. Desktop drops a remote branch from that list when a
+ * local branch tracks it, so the local branches' upstreams count too.
+ */
+export function getRemoteBranchNames(
+  branches: ReadonlyArray<Branch>
+): ReadonlyArray<string> {
+  const names = new Set<string>()
+  for (const branch of branches) {
+    if (branch.type === BranchType.Remote) {
+      names.add(branch.nameWithoutRemote)
+    } else if (branch.upstreamWithoutRemote !== null) {
+      names.add(branch.upstreamWithoutRemote)
+    }
+  }
+  return [...names]
 }

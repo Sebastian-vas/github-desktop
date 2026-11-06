@@ -38,7 +38,6 @@ import { PreferencesTab } from '../models/preferences'
 import { findItemByAccessKey, itemIsSelectable } from '../models/app-menu'
 import { Account } from '../models/account'
 import { TipState } from '../models/tip'
-import { BranchType } from '../models/branch'
 import { CloneRepositoryTab } from '../models/clone-repository-tab'
 import { CloningRepository } from '../models/cloning-repository'
 
@@ -80,7 +79,10 @@ import { AIReviewDialog } from './ai-review/ai-review-dialog'
 import { RepoCommandsDialog } from './repo-commands/repo-commands-dialog'
 import { getAISettings } from '../lib/ai/settings'
 import { DiffSelectionType } from '../models/diff'
-import { guessProductionBranch } from '../lib/git-flows/production-branch'
+import {
+  getRemoteBranchNames,
+  guessProductionBranch,
+} from '../lib/git-flows/production-branch'
 import { ConfirmRestart } from './preferences/confirm-restart'
 import { RepositorySettings } from './repository-settings'
 import { AppError } from './app-error'
@@ -1113,9 +1115,7 @@ export class App extends React.Component<IAppProps, IAppState> {
     const { branchesState } = state.state
     const productionBranch = guessProductionBranch(
       context.repository,
-      branchesState.allBranches
-        .filter(b => b.type === BranchType.Remote)
-        .map(b => b.nameWithoutRemote),
+      getRemoteBranchNames(branchesState.allBranches),
       context.main
     )
 
