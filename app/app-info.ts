@@ -25,6 +25,10 @@ export function getReplacements() {
     __DEV__: isDevBuild,
     __RELEASE_CHANNEL__: s(channel),
     __UPDATES_URL__: s(getUpdatesURL()),
+    // This fork updates itself from the GitHub releases of this repository.
+    __UPDATE_REPOSITORY__: s(
+      process.env.DESKTOP_UPDATE_REPOSITORY || 'Sebastian-vas/github-desktop'
+    ),
     __SHA__: s(getSHA()),
     'process.platform': s(process.platform),
     'process.env.NODE_ENV': s(process.env.NODE_ENV || 'development'),

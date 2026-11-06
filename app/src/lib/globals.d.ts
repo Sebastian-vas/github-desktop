@@ -47,6 +47,9 @@ declare const __RELEASE_CHANNEL__:
 /** The URL for Squirrel's updates. */
 declare const __UPDATES_URL__: string
 
+/** owner/name of the repository whose GitHub releases this fork updates from */
+declare const __UPDATE_REPOSITORY__: string
+
 /**
  * The currently executing process kind, this is specific to desktop
  * and identifies the processes that we have.

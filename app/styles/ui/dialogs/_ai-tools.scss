@@ -648,3 +648,42 @@ dialog#create-branch .branch-name-ai {
 .commit-merge-main-button.hotfix-button .octicon {
   color: var(--color-deleted);
 }
+
+// ------------------------------------------------------- update banner
+
+#fork-update-banner {
+  .contents {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing);
+    flex-wrap: wrap;
+  }
+
+  .ok {
+    color: var(--color-new);
+  }
+
+  .accent {
+    color: var(--link-button-color);
+  }
+
+  .warn {
+    color: var(--color-modified);
+  }
+
+  .fork-update-progress {
+    flex: 0 0 140px;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--box-alt-background-color);
+    border: var(--base-border);
+    overflow: hidden;
+
+    > span {
+      display: block;
+      height: 100%;
+      background: var(--color-new);
+      transition: width 0.2s ease;
+    }
+  }
+}

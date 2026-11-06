@@ -2,9 +2,13 @@ name: Release
 
 # Builds GitHub Desktop (with the AI features) for Linux, Windows and macOS.
 #
-# - Pushing a tag like v3.4.14-linux1-ai1 builds everything and publishes a
-#   GitHub release with the installers. The app version is taken from the
-#   tag (without the "v").
+# - Pushing a tag like v3.4.14-linux1-ai006 builds everything and publishes
+#   a GitHub release with the installers. The app version is taken from the
+#   tag (without the "v"). Number releases with three digits (ai006, ai007…)
+#   so Windows' updater, which compares them as text, keeps them in order.
+# - The installed apps update themselves from the latest release (see
+#   app/src/main-process/fork-updater.ts), so every release must keep the
+#   file names below.
 # - "Run workflow" in the Actions tab builds everything without publishing;
 #   the installers are attached to the run as artifacts.
 
@@ -19,6 +23,8 @@ permissions:
 
 env:
   NODE_VERSION: 20.17.0
+  # Where the installed apps look for updates
+  DESKTOP_UPDATE_REPOSITORY: ${{ github.repository }}
 
 jobs:
   linux:
@@ -71,12 +77,18 @@ jobs:
       - run: yarn
       - run: yarn build:prod
       - run: yarn package
-      - name: Collect installer
+      - name: Collect installer and update package
         shell: bash
         run: |
           mkdir -p release
           # electron-winstaller writes the installer straight into dist/
           cp dist/GitHubDesktopSetup-x64.exe release/GitHubDesktop-Windows-x64-Setup.exe
+          # Squirrel's update feed: the full package and its RELEASES index.
+          # package.ts renames the package to include the architecture, so
+          # point RELEASES at the new name.
+          cp dist/GitHubDesktop-*-x64-full.nupkg release/
+          sed 's/-full\.nupkg/-x64-full.nupkg/' dist/RELEASES > release/RELEASES
+          cat release/RELEASES
       - uses: actions/upload-artifact@v7
         with:
           name: windows-x64

@@ -20,12 +20,7 @@ import { shouldRenderApplicationMenu } from './lib/features'
 import { matchExistingRepository } from '../lib/repository-matching'
 import { getDotComAPIEndpoint } from '../lib/api'
 import { getVersion, getName } from './lib/app-proxy'
-import {
-  getOS,
-  isOSNoLongerSupportedByElectron,
-  isMacOSAndNoLongerSupportedByElectron,
-  isWindowsAndNoLongerSupportedByElectron,
-} from '../lib/get-os'
+import { getOS, isOSNoLongerSupportedByElectron } from '../lib/get-os'
 import { MenuEvent, isTestMenuEvent } from '../main-process/menu'
 import {
   Repository,
@@ -77,6 +72,7 @@ import { ReleaseToProductionDialog } from './git-flows/release-to-production-dia
 import { SafePullDialog } from './git-flows/safe-pull-dialog'
 import { AIReviewDialog } from './ai-review/ai-review-dialog'
 import { RepoCommandsDialog } from './repo-commands/repo-commands-dialog'
+import { ForkUpdateBanner } from './fork-update/fork-update-banner'
 import { TeamOverviewDialog } from './git-flows/team-overview-dialog'
 import { HotfixDialog, isHotfixBranch } from './git-flows/hotfix-dialog'
 import { PullRequestDialog } from './ai-tools/pull-request-dialog'
@@ -253,6 +249,7 @@ export class App extends React.Component<IAppProps, IAppState> {
   private updateIntervalHandle?: number
 
   private repositoryViewRef = React.createRef<RepositoryView>()
+  private forkUpdateBannerRef = React.createRef<ForkUpdateBanner>()
 
   /**
    * Gets a value indicating whether or not we're currently showing a
@@ -449,6 +446,8 @@ export class App extends React.Component<IAppProps, IAppState> {
         return this.showRecovery()
       case 'flows-explain-ci':
         return this.showExplainCI()
+      case 'flows-check-updates':
+        return this.checkForUpdates(false)
       case 'push':
         return this.push()
       case 'force-push':
@@ -625,35 +624,16 @@ export class App extends React.Component<IAppProps, IAppState> {
 
   private checkForUpdates(
     inBackground: boolean,
+    // Only meaningful for GitHub's own update servers
     skipGuidCheck: boolean = false
   ) {
-    // This is a custom build (AI features): GitHub's update server would
-    // replace it with the official app, so automatic updates are off. New
-    // versions are published as releases of this fork instead.
-    if (
-      __LINUX__ ||
-      __WIN32__ ||
-      __DARWIN__ ||
-      __RELEASE_CHANNEL__ === 'development'
-    ) {
+    // This fork updates itself from the GitHub releases of its repository
+    // (see main-process/fork-updater.ts), never from GitHub's servers, which
+    // would replace it with the official app.
+    if (__RELEASE_CHANNEL__ === 'development') {
       return
     }
-
-    if (isWindowsAndNoLongerSupportedByElectron()) {
-      log.error(
-        `Can't check for updates on Windows 8.1 or older. Next available update only supports Windows 10 and later`
-      )
-      return
-    }
-
-    if (isMacOSAndNoLongerSupportedByElectron()) {
-      log.error(
-        `Can't check for updates on macOS 10.14 or older. Next available update only supports macOS 10.15 and later`
-      )
-      return
-    }
-
-    updateStore.checkForUpdates(inBackground, skipGuidCheck)
+    this.forkUpdateBannerRef.current?.check(inBackground)
   }
 
   private getDotComAccount(): Account | null {
@@ -3178,6 +3158,7 @@ export class App extends React.Component<IAppProps, IAppState> {
       >
         {this.renderToolbar()}
         {this.renderBanner()}
+        {this.renderForkUpdateBanner()}
         {this.renderRepository()}
         {this.renderPopups()}
         {this.renderDragElement()}
@@ -3591,6 +3572,18 @@ export class App extends React.Component<IAppProps, IAppState> {
   }
 
   // we currently only render one banner at a time
+  private renderForkUpdateBanner() {
+    if (this.inNoRepositoriesViewState()) {
+      return null
+    }
+    return (
+      <ForkUpdateBanner
+        ref={this.forkUpdateBannerRef}
+        onOpenUrl={this.openInBrowser}
+      />
+    )
+  }
+
   private renderBanner(): JSX.Element | null {
     // The inset light title bar style without the toolbar
     // can't support banners at the moment. So for the

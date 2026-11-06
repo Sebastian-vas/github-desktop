@@ -54,6 +54,7 @@ export type MenuEvent =
   | 'flows-pull-request'
   | 'flows-recovery'
   | 'flows-explain-ci'
+  | 'flows-check-updates'
   | TestMenuEvent
 
 /**

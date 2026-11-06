@@ -148,6 +148,7 @@ const allMenuIds: ReadonlyArray<MenuIDs> = [
   'flows-pull-request',
   'flows-recovery',
   'flows-explain-ci',
+  'flows-check-updates',
 ]
 
 function getAllMenusDisabledBuilder(): MenuStateBuilder {

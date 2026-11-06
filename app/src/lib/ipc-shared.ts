@@ -18,6 +18,7 @@ import { DesktopNotificationPermission } from 'desktop-notifications/dist/notifi
 import { NotificationCallback } from 'desktop-notifications/dist/notification-callback'
 import { DesktopAliveEvent } from './stores/alive-store'
 import { CLIAction } from './cli-action'
+import { ForkUpdateCheck, ForkUpdateResult } from './fork-update'
 import {
   AIResult,
   IAICommitMessage,
@@ -45,6 +46,7 @@ export type RequestChannels = {
   'claude-command-stop': (runId: string) => void
   'shell-command-event': (runId: string, event: ShellCommandEvent) => void
   'shell-command-stop': (runId: string) => void
+  'fork-update-progress': (fraction: number) => void
   'select-all-window-contents': () => void
   'dialog-did-open': () => void
   'update-menu-state': (
@@ -167,6 +169,9 @@ export type RequestResponseChannels = {
   ) => Promise<AIResult<IAIReview>>
   'ai-claude-account-status': () => Promise<IClaudeAccountStatus>
   'ai-task': (request: IAITaskRequest) => Promise<AIResult<unknown>>
+  'fork-update-check': () => Promise<ForkUpdateCheck>
+  'fork-update-download': () => Promise<ForkUpdateResult>
+  'fork-update-install': () => Promise<ForkUpdateResult>
   'ai-usage-get': () => Promise<IClaudeUsage | null>
   'ai-usage-refresh': () => Promise<IClaudeUsage | null>
   'shell-command-start': (

@@ -49,6 +49,11 @@ import {
   isValidCustomIntegration,
 } from '../../lib/custom-integration'
 import { AI } from './ai'
+import {
+  ForkUpdateMode,
+  getForkUpdateMode,
+  setForkUpdateMode,
+} from '../../lib/fork-update-settings'
 import { AIModelId, AIOutputLanguage, AIProvider } from '../../lib/ai/types'
 import {
   getAIApiKey,
@@ -150,6 +155,7 @@ interface IPreferencesState {
   readonly aiProvider: AIProvider
   readonly aiUseProjectContext: boolean
   readonly flowsSafePull: boolean
+  readonly forkUpdateMode: ForkUpdateMode
   readonly aiApiKey: string
   readonly initialAIApiKey: string
   readonly aiModel: AIModelId
@@ -221,6 +227,7 @@ export class Preferences extends React.Component<
       aiProvider: aiSettings.provider,
       aiUseProjectContext: aiSettings.useProjectContext,
       flowsSafePull: aiSettings.safePullButton,
+      forkUpdateMode: getForkUpdateMode(),
       aiModel: aiSettings.model,
       aiLanguage: aiSettings.language,
     }
@@ -597,6 +604,8 @@ export class Preferences extends React.Component<
             onUseProjectContextChanged={this.onAIUseProjectContextChanged}
             safePull={this.state.flowsSafePull}
             onSafePullChanged={this.onFlowsSafePullChanged}
+            updateMode={this.state.forkUpdateMode}
+            onUpdateModeChanged={this.onForkUpdateModeChanged}
             apiKey={this.state.aiApiKey}
             model={this.state.aiModel}
             language={this.state.aiLanguage}
@@ -636,6 +645,10 @@ export class Preferences extends React.Component<
 
   private onFlowsSafePullChanged = (flowsSafePull: boolean) => {
     this.setState({ flowsSafePull })
+  }
+
+  private onForkUpdateModeChanged = (forkUpdateMode: ForkUpdateMode) => {
+    this.setState({ forkUpdateMode })
   }
 
   private onAIApiKeyChanged = (aiApiKey: string) => {
@@ -861,6 +874,8 @@ export class Preferences extends React.Component<
       dispatcher.postError(e)
       return
     }
+
+    setForkUpdateMode(this.state.forkUpdateMode)
 
     setAISettings({
       enabled: this.state.aiEnabled,

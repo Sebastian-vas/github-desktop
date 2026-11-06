@@ -240,7 +240,8 @@ export class AppWindow {
       ipcWebContents.send(this.window.webContents, 'native-theme-updated')
     })
 
-    this.setupAutoUpdater()
+    // This fork has its own updater (main-process/fork-updater.ts), fed by
+    // the repository's GitHub releases; GitHub's update pipeline stays off.
   }
 
   /**

@@ -14,6 +14,11 @@ import {
   IClaudeAccountStatus,
 } from '../../lib/ai/types'
 import { invoke } from '../../lib/ipc-renderer'
+import {
+  CheckForUpdatesNowEvent,
+  ForkUpdateMode,
+} from '../../lib/fork-update-settings'
+import { getVersion } from '../lib/app-proxy'
 
 interface IAIPreferencesProps {
   readonly enabled: boolean
@@ -27,6 +32,8 @@ interface IAIPreferencesProps {
   readonly onUseProjectContextChanged: (value: boolean) => void
   readonly safePull: boolean
   readonly onSafePullChanged: (value: boolean) => void
+  readonly updateMode: ForkUpdateMode
+  readonly onUpdateModeChanged: (mode: ForkUpdateMode) => void
   readonly onApiKeyChanged: (apiKey: string) => void
   readonly onModelChanged: (model: AIModelId) => void
   readonly onLanguageChanged: (language: AIOutputLanguage) => void
@@ -39,6 +46,7 @@ interface IAIPreferencesState {
 }
 
 const providers: ReadonlyArray<AIProvider> = ['claude-account', 'api-key']
+const updateModes: ReadonlyArray<ForkUpdateMode> = ['auto', 'notify']
 
 export class AI extends React.Component<
   IAIPreferencesProps,
@@ -159,8 +167,37 @@ export class AI extends React.Component<
             run migrations, install dependencies, rebuild…
           </p>
         </div>
+
+        <div className="advanced-section">
+          <h2 id="fork-update-heading">Updates</h2>
+          <RadioGroup<ForkUpdateMode>
+            ariaLabelledBy="fork-update-heading"
+            selectedKey={this.props.updateMode}
+            radioButtonKeys={updateModes}
+            onSelectionChanged={this.props.onUpdateModeChanged}
+            renderRadioButtonLabelContents={this.renderUpdateModeLabel}
+          />
+          <p className="git-settings-description">
+            You have version {getVersion()}. New versions come from the releases
+            of {__UPDATE_REPOSITORY__} on GitHub.{' '}
+            {__LINUX__ &&
+              'With the .deb or .rpm, installing asks for your password. '}
+            <LinkButton onClick={this.onCheckForUpdates}>
+              Check for updates now
+            </LinkButton>
+          </p>
+        </div>
       </DialogContent>
     )
+  }
+
+  private renderUpdateModeLabel = (mode: ForkUpdateMode) =>
+    mode === 'auto'
+      ? 'Download updates automatically and install them on restart'
+      : 'Only let me know when there is a new version'
+
+  private onCheckForUpdates = () => {
+    window.dispatchEvent(new Event(CheckForUpdatesNowEvent))
   }
 
   private renderProviderLabel = (provider: AIProvider) =>

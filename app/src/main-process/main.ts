@@ -70,6 +70,11 @@ import {
   refreshClaudeUsage,
 } from './claude-code'
 import { startShellCommand, stopShellCommand } from './shell-runner'
+import {
+  checkForForkUpdate,
+  downloadForkUpdate,
+  installForkUpdate,
+} from './fork-updater'
 
 app.setAppLogsPath()
 enableSourceMaps()
@@ -581,6 +586,12 @@ app.on('ready', () => {
     startShellCommand(runId, cwd, command, event.sender)
   )
   ipcMain.on('shell-command-stop', (_, runId) => stopShellCommand(runId))
+
+  ipcMain.handle('fork-update-check', async () => checkForForkUpdate())
+  ipcMain.handle('fork-update-download', async event =>
+    downloadForkUpdate(event.sender)
+  )
+  ipcMain.handle('fork-update-install', async () => installForkUpdate())
 
   ipcMain.handle('ai-generate-commit-message', async (_, request) =>
     generateCommitMessageWithAI(request)

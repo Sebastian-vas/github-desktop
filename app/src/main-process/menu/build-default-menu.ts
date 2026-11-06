@@ -536,6 +536,12 @@ export function buildDefaultMenu({
         accelerator: 'CmdOrCtrl+Shift+J',
         click: emit('flows-repo-commands'),
       },
+      separator,
+      {
+        label: __DARWIN__ ? 'Check for Updates' : 'Check for updates',
+        id: 'flows-check-updates',
+        click: emit('flows-check-updates'),
+      },
     ],
   })
 
