@@ -1,3 +1,4 @@
+import * as Path from 'path'
 import '../lib/logging/main/install'
 
 import {
@@ -76,6 +77,16 @@ import {
   installForkUpdate,
 } from './fork-updater'
 
+// The app was renamed from "GitHub Desktop" to "Gitflow". Electron names the
+// data folder (repositories, settings, logs) after the app, so keep using the
+// existing one or everyone would start from scratch.
+app.setPath(
+  'userData',
+  Path.join(
+    app.getPath('appData'),
+    __DEV__ ? 'GitHub Desktop-dev' : 'GitHub Desktop'
+  )
+)
 app.setAppLogsPath()
 enableSourceMaps()
 

@@ -44,8 +44,8 @@ export class UntrustedCertificate extends React.Component<
       >
         <DialogContent>
           <p>
-            GitHub Desktop cannot verify the identity of {host}. The certificate
-            ({this.props.certificate.subjectName}) is invalid or untrusted.{' '}
+            Gitflow cannot verify the identity of {host}. The certificate (
+            {this.props.certificate.subjectName}) is invalid or untrusted.{' '}
             <strong>
               This may indicate attackers are trying to steal your data.
             </strong>

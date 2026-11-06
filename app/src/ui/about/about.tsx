@@ -198,8 +198,8 @@ export class About extends React.Component<IAboutProps, IAboutState> {
     if (__LINUX__) {
       return (
         <p>
-          Please visit the GitHub Desktop for Linux release page for
-          Linux-specific release notes and to download the latest version.
+          Gitflow updates itself from its releases on GitHub. Use Flows → Check
+          for updates to look for a new version now.
         </p>
       )
     }
@@ -310,12 +310,7 @@ export class About extends React.Component<IAboutProps, IAboutState> {
         {this.renderUpdateErrors()}
         <DialogContent>
           <Row className="logo">
-            <img
-              src={DesktopLogo}
-              alt="GitHub Desktop"
-              width="64"
-              height="64"
-            />
+            <img src={DesktopLogo} alt="Gitflow" width="64" height="64" />
           </Row>
           <h1 id={titleId}>About {name}</h1>
           <p className="no-padding">

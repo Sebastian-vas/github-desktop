@@ -1,4 +1,4 @@
-// Logo for "GitHub Desktop + AI" in the style of Flowless' division logos
+// Logo for Gitflow in the style of Flowless' division logos
 // (insumos/divisions/logos/generar.py): gradient disc, open ring, name on the
 // arc in Montserrat SemiBold outlines, white symbol; normal / oscuro / favicon.
 const fs = require('fs')
@@ -7,7 +7,7 @@ const opentype = require('opentype.js')
 const { Resvg } = require('@resvg/resvg-js')
 
 const OUT = process.argv[2]
-const WORD = process.env.WORD || 'DESKTOP'
+const WORD = process.env.WORD || 'GITFLOW'
 const C0 = process.env.C0 || '#7c3aed'
 const C1 = process.env.C1 || '#2e1065'
 fs.mkdirSync(OUT, { recursive: true })

@@ -1,6 +1,7 @@
 name: Release
 
-# Builds GitHub Desktop (with the AI features) for Linux, Windows and macOS.
+# Builds Gitflow (GitHub Desktop with the AI features and team flows) for
+# Linux, Windows and macOS.
 #
 # - Pushing a tag like v3.4.14-linux1-ai006 builds everything and publishes
 #   a GitHub release with the installers. The app version is taken from the
@@ -134,7 +135,9 @@ jobs:
       - name: Collect app
         run: |
           mkdir -p release
-          cp "dist/GitHub Desktop-${{ matrix.arch }}.zip" "release/GitHubDesktop-macOS-${{ matrix.arch }}.zip"
+          # The zip is named after the product (Gitflow); the release keeps the
+          # file name the installed apps' updater looks for.
+          cp "dist/Gitflow-${{ matrix.arch }}.zip" "release/GitHubDesktop-macOS-${{ matrix.arch }}.zip"
       - uses: actions/upload-artifact@v7
         with:
           name: macos-${{ matrix.arch }}
@@ -158,7 +161,7 @@ jobs:
         run: sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
       - uses: softprops/action-gh-release@v3
         with:
-          name: GitHub Desktop + AI ${{ github.ref_name }}
+          name: Gitflow ${{ github.ref_name }}
           generate_release_notes: true
           body: |
             ## Installers
@@ -172,9 +175,9 @@ jobs:
             | macOS Apple Silicon | `GitHubDesktop-macOS-arm64.zip` |
             | macOS Intel | `GitHubDesktop-macOS-x64.zip` |
 
-            **macOS:** unzip, move *GitHub Desktop* to Applications and run once
-            `xattr -cr "/Applications/GitHub Desktop.app"` (the app is not notarized by Apple).
+            **macOS:** unzip, move *Gitflow* to Applications and run once
+            `xattr -cr "/Applications/Gitflow.app"` (the app is not notarized by Apple).
 
-            Automatic updates are off in this build: new versions are published here.
+            Installed apps update themselves from these releases (Flows → Check for updates).
           files: artifacts/*
           fail_on_unmatched_files: true

@@ -52,12 +52,12 @@ const options: DebianOptions = {
   src: getDistPath(),
   dest: distRoot,
   arch: getArchitecture(),
-  description: 'Simple collaboration from your desktop',
+  description: 'Git for teams, with AI',
   productDescription:
-    'This is the unofficial port of GitHub Desktop for Linux distributions',
+    'Gitflow: git for teams with AI (safe pulls, releases, conflict resolution and reviews), based on GitHub Desktop',
   section: 'GNOME;GTK;Development',
   priority: 'extra',
-  homepage: 'https://github.com/shiftkey/desktop',
+  homepage: 'https://github.com/Sebastian-vas/github-desktop',
   depends: [
     // Desktop-specific dependencies
     'libcurl3 | libcurl4',

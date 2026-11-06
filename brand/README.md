@@ -1,11 +1,11 @@
-# Logo de GitHub Desktop + AI
+# Logo de Gitflow
 
 Mismo sistema que los logos de división de Flowless (`insumos/divisions/logos/` en ese repo):
 disco con degradado, anillo abierto, el nombre en el arco y el símbolo en blanco.
 
 | Archivo | Para qué |
 |---|---|
-| `logo/normal.{svg,png}` | El logo: disco con el degradado, anillo, `DESKTOP` en el arco y el símbolo en blanco. Fondos claros. |
+| `logo/normal.{svg,png}` | El logo: disco con el degradado, anillo, `GITFLOW` en el arco y el símbolo en blanco. Fondos claros. |
 | `logo/oscuro.{svg,png}` | Fondos oscuros: disco blanco con la marca en su degradado. |
 | `logo/favicon.{svg,png}` | Solo el símbolo sobre el disco, más grande y grueso para leerse a 16 px. Íconos y todo tamaño menor a 80 px. |
 

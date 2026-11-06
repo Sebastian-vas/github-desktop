@@ -49,9 +49,9 @@ const options: RedhatOptions = {
   src: getDistPath(),
   dest: distRoot,
   arch: getArchitecture(),
-  description: 'Simple collaboration from your desktop',
+  description: 'Git for teams, with AI',
   productDescription:
-    'This is the unofficial port of GitHub Desktop for Linux distributions',
+    'Gitflow: git for teams with AI (safe pulls, releases, conflict resolution and reviews), based on GitHub Desktop',
   categories: ['GNOME', 'GTK', 'Development'],
   requires: [
     // dugite-native dependencies
@@ -72,7 +72,7 @@ const options: RedhatOptions = {
     post: 'script/resources/rpm/post.sh',
     preun: 'script/resources/rpm/preun.sh',
   },
-  homepage: 'https://github.com/shiftkey/desktop',
+  homepage: 'https://github.com/Sebastian-vas/github-desktop',
   mimeType: [
     'x-scheme-handler/x-github-client',
     'x-scheme-handler/x-github-desktop-auth',
