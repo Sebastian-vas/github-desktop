@@ -25,3 +25,14 @@ node generar-logo.js logo
 
 Variables opcionales: `WORD` (texto del arco), `C0`/`C1` (colores del degradado) y `MONTSERRAT` (ruta a
 `Montserrat-SemiBold.ttf`; por defecto la del repo de Flowless).
+
+## Íconos de la app
+
+`generar-iconos.js` genera desde `logo/` todos los íconos de la app: los PNG de Linux
+(`app/static/linux/logos/`), el `.ico` de Windows y el `.icns` de macOS (`app/static/logos/icon-logo.*`) y el
+logo de "Acerca de" (`app/static/common/*logo-64x64@2x.png`). Debajo de 80 px usa el favicon (el nombre del
+arco no se lee); desde 128 px, el logo normal. Regenerar después de cambiar el logo:
+
+```
+node brand/generar-iconos.js
+```

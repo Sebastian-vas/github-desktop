@@ -98,7 +98,10 @@ function packageWindows() {
     process.exit(1)
   }
 
-  const iconUrl = 'https://desktop.githubusercontent.com/app-icon.ico'
+  // Shown in Windows' installed apps list; this fork's own icon.
+  const iconUrl = `https://raw.githubusercontent.com/${
+    process.env.DESKTOP_UPDATE_REPOSITORY || 'Sebastian-vas/github-desktop'
+  }/linux/app/static/logos/icon-logo.ico`
 
   const nugetPkgName = getWindowsIdentifierName()
   const options: electronInstaller.Options = {
