@@ -6,11 +6,19 @@ import * as octicons from '../octicons/octicons.generated'
 import { Octicon } from '../octicons'
 import { Select } from '../lib/select'
 import { Loading } from '../lib/loading'
-import { ProgressCallback } from '../../lib/git-flows/flow-run'
+import { Button } from '../lib/button'
+import { CopyButton } from '../copy-button'
+import { git } from '../../lib/git/core'
+import { GitFlowOutcome, ProgressCallback } from '../../lib/git-flows/flow-run'
 import {
+  bumpVersion,
+  readProjectVersion,
   ReleaseToProductionRun,
   ReleaseToProductionSteps,
 } from '../../lib/git-flows/release-to-production'
+import { getMainRemote } from '../../lib/git-flows/team'
+import { generateReleaseNotes } from '../../lib/ai/tasks'
+import { IAIReleaseNotes } from '../../lib/ai/types'
 import {
   getProductionBranch,
   getProductionBranchCandidates,
@@ -32,6 +40,8 @@ interface IReleaseToProductionDialogProps {
   readonly resolvedExternalEditor: string | null
   readonly openFileInExternalEditor: (fullPath: string) => void
   readonly onDismissed: () => void
+  /** Opens the AI review of what's about to be released */
+  readonly onReviewRelease: (base: string, head: string) => void
 }
 
 interface IReleaseToProductionDialogState {
@@ -40,6 +50,93 @@ interface IReleaseToProductionDialogState {
   readonly production: string | null
   /** Commits that will be released; null while loading */
   readonly preview: ReadonlyArray<string> | null
+  /** Current VERSION of the project, if it has one */
+  readonly version: string | null
+  /** Part of VERSION to bump (0 = first), or null to leave it */
+  readonly versionBump: number | null
+  /** Production's tip before releasing, for the release notes */
+  readonly productionTip: string | null
+  readonly remote: string
+}
+
+interface IReleaseNotesPanelProps {
+  readonly repository: Repository
+  readonly range: string
+  readonly version: string | null
+  readonly production: string
+}
+
+interface IReleaseNotesPanelState {
+  readonly loading: boolean
+  readonly notes: IAIReleaseNotes | null
+  readonly error: string | null
+}
+
+/** "Write the release notes" with AI, once the release is out */
+class ReleaseNotesPanel extends React.Component<
+  IReleaseNotesPanelProps,
+  IReleaseNotesPanelState
+> {
+  private unmounted = false
+
+  public constructor(props: IReleaseNotesPanelProps) {
+    super(props)
+    this.state = { loading: false, notes: null, error: null }
+  }
+
+  public componentWillUnmount() {
+    this.unmounted = true
+  }
+
+  private onWrite = async () => {
+    this.setState({ loading: true, error: null })
+    const result = await generateReleaseNotes(
+      this.props.repository,
+      this.props.range,
+      this.props.version,
+      this.props.production
+    )
+    if (this.unmounted) {
+      return
+    }
+    if (result.kind === 'error') {
+      this.setState({ loading: false, error: result.message })
+    } else {
+      this.setState({ loading: false, notes: result.value })
+    }
+  }
+
+  public render() {
+    const { loading, notes, error } = this.state
+
+    if (notes !== null) {
+      const text = `# ${notes.title}\n\n${notes.notes}`
+      return (
+        <div className="release-notes">
+          <div className="release-notes-header">
+            <Octicon symbol={octicons.megaphone} />
+            <strong>{notes.title}</strong>
+            <CopyButton copyContent={text} ariaLabel="Copy the release notes" />
+          </div>
+          <div className="ai-markdown">{notes.notes}</div>
+        </div>
+      )
+    }
+
+    return (
+      <div className="release-notes">
+        <Button
+          className="ai-button"
+          onClick={this.onWrite}
+          disabled={loading || !getAISettings().enabled}
+        >
+          {loading ? <Loading /> : <Octicon symbol={octicons.sparkleFill} />}
+          {loading ? 'Writing the release notes…' : 'Write the release notes'}
+        </Button>
+        {error !== null && <p className="release-notes-error">{error}</p>}
+      </div>
+    )
+  }
 }
 
 const PreviewLimit = 8
@@ -56,7 +153,15 @@ export class ReleaseToProductionDialog extends React.Component<
 
   public constructor(props: IReleaseToProductionDialogProps) {
     super(props)
-    this.state = { candidates: null, production: null, preview: null }
+    this.state = {
+      candidates: null,
+      production: null,
+      preview: null,
+      version: null,
+      versionBump: null,
+      productionTip: null,
+      remote: 'origin',
+    }
   }
 
   public async componentDidMount() {
@@ -66,10 +171,14 @@ export class ReleaseToProductionDialog extends React.Component<
       mainBranch
     )
     const production = await getProductionBranch(repository, candidates)
+    const remote = await getMainRemote(repository, mainBranch)
+    const version = await readProjectVersion(repository.path)
     if (this.unmounted) {
       return
     }
-    this.setState({ candidates, production }, () => this.loadPreview())
+    this.setState({ candidates, production, remote, version }, () =>
+      this.loadPreview()
+    )
   }
 
   public componentWillUnmount() {
@@ -88,9 +197,92 @@ export class ReleaseToProductionDialog extends React.Component<
       this.props.mainBranch,
       production
     )
+    const tip = await git(
+      [
+        'rev-parse',
+        '--verify',
+        '--quiet',
+        `${this.state.remote}/${production}`,
+      ],
+      this.props.repository.path,
+      'release-productionTip',
+      { successExitCodes: new Set([0, 1, 128]) }
+    )
     if (!this.unmounted && this.state.production === production) {
-      this.setState({ preview })
+      this.setState({
+        preview,
+        productionTip: tip.exitCode === 0 ? tip.stdout.trim() : null,
+      })
     }
+  }
+
+  private onVersionBumpChanged = (
+    event: React.FormEvent<HTMLSelectElement>
+  ) => {
+    const value = event.currentTarget.value
+    this.setState({ versionBump: value === '' ? null : parseInt(value, 10) })
+  }
+
+  private onReviewRelease = () => {
+    const { production, remote } = this.state
+    if (production !== null) {
+      this.props.onReviewRelease(
+        `${remote}/${production}`,
+        this.props.mainBranch
+      )
+    }
+  }
+
+  private renderReleaseExtra = (outcome: GitFlowOutcome) => {
+    const { production, productionTip, version, versionBump } = this.state
+    if (
+      outcome.kind !== 'completed' ||
+      production === null ||
+      productionTip === null
+    ) {
+      return null
+    }
+    const released =
+      versionBump !== null && version !== null
+        ? bumpVersion(version, versionBump)
+        : version
+    return (
+      <ReleaseNotesPanel
+        repository={this.props.repository}
+        range={`${productionTip}..${this.props.mainBranch}`}
+        version={released}
+        production={production}
+      />
+    )
+  }
+
+  private renderVersion() {
+    const { version, versionBump } = this.state
+    if (version === null) {
+      return null
+    }
+    const parts = version.replace(/^v/, '').split('.')
+    if (parts.some(p => !/^\d+$/.test(p))) {
+      return null
+    }
+    const names =
+      parts.length === 4
+        ? ['major', 'feature', 'fix', 'tweak']
+        : ['major', 'minor', 'patch', 'build']
+    return (
+      <Select
+        label={`VERSION (now ${version})`}
+        value={versionBump === null ? '' : String(versionBump)}
+        onChange={this.onVersionBumpChanged}
+      >
+        <option value="">Keep {version}</option>
+        {parts.map((_, i) => (
+          <option key={i} value={String(i)}>
+            Bump {names[i] ?? `part ${i + 1}`}: {bumpVersion(version, i)}
+          </option>
+        ))}
+      </Select>
+    )
   }
 
   private onProductionChanged = (event: React.FormEvent<HTMLSelectElement>) => {
@@ -123,7 +315,8 @@ export class ReleaseToProductionDialog extends React.Component<
       production,
       this.props.commitContext !== null ? this.commit : null,
       getAISettings().language,
-      onProgress
+      onProgress,
+      this.state.versionBump
     )
   }
 
@@ -230,6 +423,18 @@ export class ReleaseToProductionDialog extends React.Component<
 
         {this.renderPreview()}
 
+        <div className="release-options">
+          {this.renderVersion()}
+          {getAISettings().enabled &&
+            this.state.preview !== null &&
+            this.state.preview.length > 0 && (
+              <Button className="ai-button" onClick={this.onReviewRelease}>
+                <Octicon symbol={octicons.shieldCheck} />
+                Review what goes out
+              </Button>
+            )}
+        </div>
+
         <p className="git-flow-note">
           Merges {mainBranch} into the production branch with a release commit
           listing what goes out (and the VERSION, if the project has one),
@@ -267,6 +472,7 @@ export class ReleaseToProductionDialog extends React.Component<
         resolvedExternalEditor={this.props.resolvedExternalEditor}
         openFileInExternalEditor={this.props.openFileInExternalEditor}
         onDismissed={this.props.onDismissed}
+        renderResultExtra={this.renderReleaseExtra}
       />
     )
   }

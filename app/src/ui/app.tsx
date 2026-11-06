@@ -77,6 +77,14 @@ import { ReleaseToProductionDialog } from './git-flows/release-to-production-dia
 import { SafePullDialog } from './git-flows/safe-pull-dialog'
 import { AIReviewDialog } from './ai-review/ai-review-dialog'
 import { RepoCommandsDialog } from './repo-commands/repo-commands-dialog'
+import { TeamOverviewDialog } from './git-flows/team-overview-dialog'
+import { HotfixDialog, isHotfixBranch } from './git-flows/hotfix-dialog'
+import { PullRequestDialog } from './ai-tools/pull-request-dialog'
+import { RecoveryDialog } from './ai-tools/recovery-dialog'
+import {
+  ExplainCIDialog,
+  ExplainCommitDialog,
+} from './ai-tools/ai-explanation-dialog'
 import { getAISettings } from '../lib/ai/settings'
 import { DiffSelectionType } from '../models/diff'
 import {
@@ -431,6 +439,16 @@ export class App extends React.Component<IAppProps, IAppState> {
         return this.showAIReview()
       case 'flows-repo-commands':
         return this.showRepoCommands()
+      case 'flows-team-overview':
+        return this.showTeamOverview()
+      case 'flows-hotfix':
+        return this.showHotfix()
+      case 'flows-pull-request':
+        return this.showPullRequestAI()
+      case 'flows-recovery':
+        return this.showRecovery()
+      case 'flows-explain-ci':
+        return this.showExplainCI()
       case 'push':
         return this.push()
       case 'force-push':
@@ -1094,6 +1112,142 @@ export class App extends React.Component<IAppProps, IAppState> {
     })
   }
 
+  private onReviewRelease =
+    (repository: Repository) => (base: string, head: string) => {
+      this.props.dispatcher.showPopup({
+        type: PopupType.AIReview,
+        repository,
+        files: [],
+        branch: head,
+        range: { base, head },
+      })
+    }
+
+  private openInBrowser = (url: string) => {
+    this.props.dispatcher.openInBrowser(url)
+  }
+
+  /** The production branch of the selected repository, if it has one */
+  private getProductionBranch() {
+    const context = this.getFlowContext()
+    const state = this.state.selectedState
+    if (
+      context === null ||
+      state == null ||
+      state.type !== SelectionType.Repository
+    ) {
+      return null
+    }
+    return guessProductionBranch(
+      context.repository,
+      getRemoteBranchNames(state.state.branchesState.allBranches),
+      context.main
+    )
+  }
+
+  private showTeamOverview = (initialTab?: number) => {
+    const context = this.getFlowContext()
+    if (context === null || context.main === null) {
+      return
+    }
+    this.props.dispatcher.showPopup({
+      type: PopupType.TeamOverview,
+      repository: context.repository,
+      branch: context.branch,
+      mainBranch: context.main,
+      productionBranch: this.getProductionBranch(),
+      initialTab,
+    })
+  }
+
+  private showHotfix = () => {
+    const context = this.getFlowContext()
+    if (context === null) {
+      return
+    }
+    const production = this.getProductionBranch()
+    if (
+      context.branch === null ||
+      context.main === null ||
+      production === null
+    ) {
+      return this.postFlowError(
+        'Hotfixes need a main branch and a production branch on the remote.'
+      )
+    }
+    this.props.dispatcher.showPopup({
+      type: PopupType.Hotfix,
+      repository: context.repository,
+      branch: context.branch,
+      mainBranch: context.main,
+      productionBranch: production,
+      commitContext: null,
+      filesToCommitCount: 0,
+    })
+  }
+
+  private showPullRequestAI = () => {
+    const context = this.getFlowContext()
+    const state = this.state.selectedState
+    if (
+      context === null ||
+      state == null ||
+      state.type !== SelectionType.Repository
+    ) {
+      return
+    }
+    if (context.branch === null || context.main === null) {
+      return this.postFlowError(
+        'Check out the branch to open a pull request from.'
+      )
+    }
+    if (context.branch === context.main) {
+      return this.postFlowError(
+        `You're on ${context.main}: pull requests go from a working branch into it.`
+      )
+    }
+    if (context.repository.gitHubRepository === null) {
+      return this.postFlowError('This repository is not on GitHub.')
+    }
+    const bases = getRemoteBranchNames(
+      state.state.branchesState.allBranches
+    ).filter(b => b !== context.branch)
+    this.props.dispatcher.showPopup({
+      type: PopupType.PullRequestAI,
+      repository: context.repository,
+      branch: context.branch,
+      mainBranch: context.main,
+      baseCandidates: bases.includes(context.main)
+        ? bases
+        : [context.main, ...bases],
+    })
+  }
+
+  private showRecovery = () => {
+    const context = this.getFlowContext()
+    if (context !== null) {
+      this.props.dispatcher.showPopup({
+        type: PopupType.Recovery,
+        repository: context.repository,
+      })
+    }
+  }
+
+  private showExplainCI = () => {
+    const context = this.getFlowContext()
+    if (context === null || context.branch === null) {
+      return
+    }
+    if (context.repository.gitHubRepository === null) {
+      return this.postFlowError('This repository is not on GitHub.')
+    }
+    this.props.dispatcher.showPopup({
+      type: PopupType.ExplainCI,
+      repository: context.repository,
+      branch: context.branch,
+    })
+  }
+
   private showAIFlowsSettings = () => {
     this.props.dispatcher.showPopup({
       type: PopupType.Preferences,
@@ -1133,6 +1287,12 @@ export class App extends React.Component<IAppProps, IAppState> {
         onReviewWithAI={this.showAIReview}
         onRunCommand={this.showRepoCommands}
         onOpenSettings={this.showAIFlowsSettings}
+        isHotfixBranch={isHotfixBranch(context.branch)}
+        onHotfix={this.showHotfix}
+        onPullRequest={this.showPullRequestAI}
+        onRecovery={this.showRecovery}
+        onExplainCI={this.showExplainCI}
+        onTeamOverview={this.showTeamOverview}
       />
     )
   }
@@ -2715,6 +2875,7 @@ export class App extends React.Component<IAppProps, IAppState> {
             resolvedExternalEditor={this.state.resolvedExternalEditor}
             openFileInExternalEditor={this.openFileInExternalEditor}
             onDismissed={onPopupDismissedFn}
+            onReviewRelease={this.onReviewRelease(popup.repository)}
           />
         )
       case PopupType.SafePull:
@@ -2738,6 +2899,79 @@ export class App extends React.Component<IAppProps, IAppState> {
             branch={popup.branch}
             resolvedExternalEditor={this.state.resolvedExternalEditor}
             openFileInExternalEditor={this.openFileInExternalEditor}
+            onDismissed={onPopupDismissedFn}
+          />
+        )
+      case PopupType.TeamOverview:
+        return (
+          <TeamOverviewDialog
+            key="team-overview"
+            repository={popup.repository}
+            branch={popup.branch}
+            mainBranch={popup.mainBranch}
+            productionBranch={popup.productionBranch}
+            initialTab={popup.initialTab}
+            onDismissed={onPopupDismissedFn}
+          />
+        )
+      case PopupType.Hotfix:
+        return (
+          <HotfixDialog
+            key="hotfix"
+            dispatcher={this.props.dispatcher}
+            repository={popup.repository}
+            branch={popup.branch}
+            mainBranch={popup.mainBranch}
+            productionBranch={popup.productionBranch}
+            commitContext={popup.commitContext}
+            filesToCommitCount={popup.filesToCommitCount}
+            onCommitCreated={popup.onCommitCreated}
+            resolvedExternalEditor={this.state.resolvedExternalEditor}
+            openFileInExternalEditor={this.openFileInExternalEditor}
+            onDismissed={onPopupDismissedFn}
+          />
+        )
+      case PopupType.PullRequestAI:
+        return (
+          <PullRequestDialog
+            key="pull-request-ai"
+            dispatcher={this.props.dispatcher}
+            repository={popup.repository}
+            accounts={this.state.accounts}
+            branch={popup.branch}
+            mainBranch={popup.mainBranch}
+            baseCandidates={popup.baseCandidates}
+            onDismissed={onPopupDismissedFn}
+          />
+        )
+      case PopupType.Recovery:
+        return (
+          <RecoveryDialog
+            key="recovery"
+            dispatcher={this.props.dispatcher}
+            repository={popup.repository}
+            onDismissed={onPopupDismissedFn}
+          />
+        )
+      case PopupType.ExplainCommit:
+        return (
+          <ExplainCommitDialog
+            key="explain-commit"
+            repository={popup.repository}
+            sha={popup.sha}
+            summary={popup.summary}
+            onOpenLink={this.openInBrowser}
+            onDismissed={onPopupDismissedFn}
+          />
+        )
+      case PopupType.ExplainCI:
+        return (
+          <ExplainCIDialog
+            key="explain-ci"
+            repository={popup.repository}
+            accounts={this.state.accounts}
+            branch={popup.branch}
+            onOpenLink={this.openInBrowser}
             onDismissed={onPopupDismissedFn}
           />
         )

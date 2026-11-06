@@ -1,5 +1,5 @@
 import * as Path from 'path'
-import { readFile } from 'fs/promises'
+import { readFile, writeFile } from 'fs/promises'
 import {
   GitFlowOutcome,
   GitFlowRun,
@@ -34,6 +34,42 @@ export const ReleaseToProductionSteps: ReadonlyArray<string> = [
 
 const MergeStep = 3
 
+/**
+ * Bumps one part of a dotted version (1.5.5.0 → 1.5.6.0 for part 2), zeroing
+ * the parts after it. Returns null if it isn't a dotted number version.
+ */
+export function bumpVersion(version: string, part: number): string | null {
+  const match = /^(v?)(\d+(?:\.\d+)*)(.*)$/.exec(version.trim())
+  if (match === null) {
+    return null
+  }
+  const numbers = match[2].split('.').map(n => parseInt(n, 10))
+  if (part < 0 || part >= numbers.length) {
+    return null
+  }
+  numbers[part]++
+  for (let i = part + 1; i < numbers.length; i++) {
+    numbers[i] = 0
+  }
+  return `${match[1]}${numbers.join('.')}`
+}
+
+/** Reads the project version from a VERSION file, if there's one */
+export async function readProjectVersion(
+  repositoryPath: string
+): Promise<string | null> {
+  try {
+    const contents = await readFile(
+      Path.join(repositoryPath, 'VERSION'),
+      'utf8'
+    )
+    const version = contents.trim().split('\n')[0].trim()
+    return version.length > 0 && version.length < 50 ? version : null
+  } catch {
+    return null
+  }
+}
+
 export class ReleaseToProductionRun extends GitFlowRun {
   protected readonly stashLabel = 'release-to-production'
 
@@ -42,6 +78,7 @@ export class ReleaseToProductionRun extends GitFlowRun {
   private releaseCommits: ReadonlyArray<string> = []
   private conflictedFiles = new Array<string>()
   private version: string | null = null
+  private bumpedTo: string | null = null
 
   protected readonly steps: ReadonlyArray<() => Promise<StepResult>> = [
     () => this.analyze(),
@@ -65,7 +102,9 @@ export class ReleaseToProductionRun extends GitFlowRun {
     private readonly production: string,
     private readonly commit: (() => Promise<string | null>) | null,
     private readonly language: 'en' | 'es',
-    onProgress: ProgressCallback
+    onProgress: ProgressCallback,
+    /** Part of VERSION to bump before releasing (0 = first), or null */
+    private readonly versionBump: number | null = null
   ) {
     super(repository, onProgress)
   }
@@ -215,6 +254,36 @@ export class ReleaseToProductionRun extends GitFlowRun {
       )
     }
 
+    if (this.versionBump !== null && this.bumpedTo === null) {
+      const current = await this.readVersion()
+      const next =
+        current !== null ? bumpVersion(current, this.versionBump) : null
+      if (current === null || next === null) {
+        throw new StepFailure(
+          'The VERSION file is missing or not a dotted number version, so it could not be bumped.'
+        )
+      }
+      this.onProgress(this.step, 'running', `VERSION ${current} → ${next}`)
+      await writeFile(
+        Path.join(this.repository.path, 'VERSION'),
+        `${next}\n`,
+        'utf8'
+      )
+      await this.git(['add', '--', 'VERSION'], 'release-addVersion')
+      await this.git(
+        [
+          'commit',
+          '-m',
+          this.language === 'es'
+            ? `Sube VERSION a ${next}`
+            : `Bump VERSION to ${next}`,
+        ],
+        'release-commitVersion'
+      )
+      this.bumpedTo = next
+      did = true
+    }
+
     const remote = this.getRemote()
     const remoteMain = `${remote.name}/${this.main}`
     const ahead = (await this.refExists(remoteMain))
@@ -355,17 +424,7 @@ export class ReleaseToProductionRun extends GitFlowRun {
     return 'done'
   }
 
-  /** Reads the project version from a VERSION file, if there's one */
-  private async readVersion(): Promise<string | null> {
-    try {
-      const contents = await readFile(
-        Path.join(this.repository.path, 'VERSION'),
-        'utf8'
-      )
-      const version = contents.trim().split('\n')[0].trim()
-      return version.length > 0 && version.length < 50 ? version : null
-    } catch {
-      return null
-    }
+  private readVersion() {
+    return readProjectVersion(this.repository.path)
   }
 }

@@ -496,12 +496,39 @@ export function buildDefaultMenu({
         id: 'flows-release-production',
         click: emit('flows-release-production'),
       },
+      {
+        label: __DARWIN__ ? 'Hotfix…' : 'Hotfix…',
+        id: 'flows-hotfix',
+        click: emit('flows-hotfix'),
+      },
+      {
+        label: __DARWIN__ ? 'Pull Request with AI…' : 'Pull request with AI…',
+        id: 'flows-pull-request',
+        click: emit('flows-pull-request'),
+      },
       separator,
       {
         label: __DARWIN__ ? 'Review Changes with AI' : 'Review changes with AI',
         id: 'flows-ai-review',
         accelerator: 'CmdOrCtrl+Shift+K',
         click: emit('flows-ai-review'),
+      },
+      {
+        label: __DARWIN__ ? 'Fix a Git Mistake…' : 'Fix a git mistake…',
+        id: 'flows-recovery',
+        click: emit('flows-recovery'),
+      },
+      {
+        label: __DARWIN__ ? 'Why Did CI Fail?' : 'Why did CI fail?',
+        id: 'flows-explain-ci',
+        click: emit('flows-explain-ci'),
+      },
+      separator,
+      {
+        label: __DARWIN__ ? 'Team Overview…' : 'Team overview…',
+        id: 'flows-team-overview',
+        accelerator: 'CmdOrCtrl+Shift+L',
+        click: emit('flows-team-overview'),
       },
       {
         label: __DARWIN__ ? 'Repository Commands…' : 'Repository commands…',

@@ -4,7 +4,16 @@ import { exec } from 'dugite'
 import { mkdirSync } from '../helpers/temp'
 import { Repository } from '../../src/models/repository'
 import { GitFlowOutcome } from '../../src/lib/git-flows/flow-run'
-import { ReleaseToProductionRun } from '../../src/lib/git-flows/release-to-production'
+import {
+  bumpVersion,
+  ReleaseToProductionRun,
+} from '../../src/lib/git-flows/release-to-production'
+import {
+  HotfixRun,
+  startHotfix,
+  toHotfixBranchName,
+} from '../../src/lib/git-flows/hotfix'
+import { findCollisions, getBranchHealth } from '../../src/lib/git-flows/team'
 import { SafePullRun } from '../../src/lib/git-flows/safe-pull'
 import {
   getRemoteBranchNames,
@@ -320,5 +329,100 @@ describe('production branch detection', () => {
     const repository = new Repository('/tmp/no-prod-test', -1, null, false)
     const names = getRemoteBranchNames([local('linux', 'origin/linux')])
     expect(guessProductionBranch(repository, names, 'linux')).toBeNull()
+  })
+})
+
+describe('VERSION bump', () => {
+  it('bumps the chosen part and zeroes the rest', () => {
+    expect(bumpVersion('1.5.5.0', 2)).toBe('1.5.6.0')
+    expect(bumpVersion('1.5.5.3', 1)).toBe('1.6.0.0')
+    expect(bumpVersion('v2.0.9', 2)).toBe('v2.0.10')
+    expect(bumpVersion('beta', 0)).toBeNull()
+    expect(bumpVersion('1.2', 5)).toBeNull()
+  })
+
+  it('bumps VERSION on main as part of the release', async () => {
+    const { localPath, remotePath, repository } = await setup()
+    await commitFile(localPath, 'VERSION', '1.5.5.0\n', 'Add version')
+
+    const runner = new ReleaseToProductionRun(
+      repository,
+      'main',
+      'prod',
+      null,
+      'es',
+      noop,
+      2
+    )
+    expectKind(await runner.run(), 'completed')
+    expect(await run(['show', 'prod:VERSION'], remotePath)).toBe('1.5.6.0')
+    expect(await run(['show', 'main:VERSION'], remotePath)).toBe('1.5.6.0')
+    expect(
+      await run(['log', '-1', '--format=%s', 'prod'], remotePath)
+    ).toContain('VERSION 1.5.6.0')
+  })
+})
+
+describe('HotfixRun', () => {
+  it('publishes a hotfix to production and brings it back to main', async () => {
+    const { localPath, otherPath, remotePath, repository } = await setup()
+
+    // main moved on since the last release
+    await commitFile(otherPath, 'NEXT.md', 'next\n', 'Next feature')
+    await run(['push', 'origin', 'main'], otherPath)
+
+    await startHotfix(repository, 'main', 'prod', 'hotfix/urgent')
+    expect(await run(['symbolic-ref', '--short', 'HEAD'], localPath)).toBe(
+      'hotfix/urgent'
+    )
+    await commitFile(localPath, 'FIX.md', 'fix\n', 'Urgent fix')
+
+    const outcome = await new HotfixRun(
+      repository,
+      'hotfix/urgent',
+      'prod',
+      'main',
+      null,
+      noop
+    ).run()
+    expectKind(outcome, 'completed')
+
+    const prodFiles = await run(['ls-tree', '--name-only', 'prod'], remotePath)
+    expect(prodFiles.split('\n')).toContain('FIX.md')
+    // production did not receive main's unreleased work
+    expect(prodFiles.split('\n')).not.toContain('NEXT.md')
+    const mainFiles = await run(['ls-tree', '--name-only', 'main'], remotePath)
+    expect(mainFiles.split('\n')).toEqual(
+      expect.arrayContaining(['FIX.md', 'NEXT.md'])
+    )
+    expect(toHotfixBranchName('Arreglar filtro de Ofertas!')).toBe(
+      'hotfix/arreglar-filtro-de-ofertas'
+    )
+  })
+})
+
+describe('collision radar', () => {
+  it('finds teammates changing the same files', async () => {
+    const { localPath, otherPath, repository } = await setup()
+
+    await run(['switch', '-c', 'wesling'], otherPath)
+    await commitFile(otherPath, 'README.md', 'line 1\nWESLING\nline 3\n', 'W')
+    await commitFile(otherPath, 'OTHER.md', 'other\n', 'Other')
+    await run(['push', '-u', 'origin', 'wesling'], otherPath)
+
+    await run(['switch', '-c', 'mine'], localPath)
+    await run(['fetch', 'origin'], localPath)
+    await FSE.writeFile(Path.join(localPath, 'README.md'), 'mine\n')
+
+    const report = await findCollisions(repository, 'main', 'mine', 'prod')
+    expect(report.myFiles).toBe(1)
+    expect(report.collisions).toHaveLength(1)
+    expect(report.collisions[0].branch).toBe('origin/wesling')
+    expect(report.collisions[0].files).toEqual(['README.md'])
+
+    const health = await getBranchHealth(repository, 'main')
+    const wesling = health.find(h => h.branch === 'origin/wesling')
+    expect(wesling?.ahead).toBe(2)
+    expect(wesling?.behind).toBe(0)
   })
 })

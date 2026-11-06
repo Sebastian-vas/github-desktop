@@ -125,7 +125,6 @@ export abstract class GitFlowRun implements IGitFlowRun {
     protected readonly onProgress: ProgressCallback
   ) {}
 
-
   /** Runs (or keeps running) the steps from where the run is */
   public async run(): Promise<GitFlowOutcome> {
     while (this.step < this.steps.length) {

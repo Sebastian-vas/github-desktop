@@ -10,6 +10,8 @@ import {
   ClaudeCommandEvent,
   IClaudeAccountStatus,
   IClaudeCommandRequest,
+  IClaudeUsage,
+  IClaudeUsageWindow,
 } from '../lib/ai/types'
 
 /**
@@ -274,6 +276,76 @@ export async function loginToClaudeAccount(): Promise<IClaudeAccountStatus> {
   return status
 }
 
+// ------------------------------------------------------------ plan usage
+
+/** Last known usage of the Claude plan, from Claude Code's rate limit events */
+let latestUsage: IClaudeUsage | null = null
+
+function toWindow(value: unknown): IClaudeUsageWindow | null {
+  if (typeof value !== 'object' || value === null) {
+    return null
+  }
+  const w = value as Record<string, unknown>
+  if (typeof w.utilization !== 'number') {
+    return null
+  }
+  return {
+    utilization: w.utilization,
+    resetsAt: typeof w.resetsAt === 'number' ? w.resetsAt : null,
+    status: typeof w.status === 'string' ? w.status : 'allowed',
+  }
+}
+
+/** Records the plan usage carried by a stream-json message, if any */
+function recordUsage(message: any) {
+  if (message?.type !== 'rate_limit_event') {
+    return
+  }
+  const info = message.rate_limit_info ?? {}
+  const windows = info.unifiedWindows ?? {}
+  let fiveHour = toWindow(windows.five_hour)
+  let sevenDay = toWindow(windows.seven_day)
+  if (fiveHour === null && info.rateLimitType === 'five_hour') {
+    fiveHour = toWindow(info)
+  }
+  if (sevenDay === null && info.rateLimitType === 'seven_day') {
+    sevenDay = toWindow(info)
+  }
+  if (fiveHour === null && sevenDay === null) {
+    return
+  }
+  latestUsage = {
+    fiveHour: fiveHour ?? latestUsage?.fiveHour ?? null,
+    sevenDay: sevenDay ?? latestUsage?.sevenDay ?? null,
+    updatedAt: Date.now(),
+  }
+}
+
+export function getClaudeUsage(): IClaudeUsage | null {
+  return latestUsage
+}
+
+/** Reads the plan usage with the smallest possible request */
+export async function refreshClaudeUsage(): Promise<IClaudeUsage | null> {
+  try {
+    await requestStructuredOutputViaClaudeCode(
+      'claude-haiku-5-5',
+      'Answer with the word ok.',
+      'ok',
+      {
+        type: 'object',
+        properties: { ok: { type: 'string' } },
+        required: ['ok'],
+        additionalProperties: false,
+      },
+      'low'
+    )
+  } catch (e) {
+    log.warn('AI: could not refresh the plan usage', e)
+  }
+  return latestUsage
+}
+
 /**
  * Sends a single prompt to Claude through Claude Code and returns the object
  * matching `schema`. No tools are enabled: Claude only reads what we send.
@@ -295,7 +367,8 @@ export async function requestStructuredOutputViaClaudeCode(
     [
       '--print',
       '--output-format',
-      'json',
+      'stream-json',
+      '--verbose',
       '--json-schema',
       JSON.stringify(schema),
       '--system-prompt',
@@ -319,15 +392,28 @@ export async function requestStructuredOutputViaClaudeCode(
     throw new Error('Claude took too long to answer. Please try again.')
   }
 
-  let output: {
-    is_error?: boolean
-    subtype?: string
-    result?: string
-    structured_output?: unknown
+  let output:
+    | {
+        is_error?: boolean
+        subtype?: string
+        result?: string
+        structured_output?: unknown
+      }
+    | undefined
+  for (const line of result.stdout.split('\n')) {
+    let message: any
+    try {
+      message = JSON.parse(line)
+    } catch {
+      continue
+    }
+    recordUsage(message)
+    if (message?.type === 'result') {
+      output = message
+    }
   }
-  try {
-    output = JSON.parse(result.stdout)
-  } catch {
+
+  if (output === undefined) {
     const text = `${result.stdout}\n${result.stderr}`.trim()
     log.error(`AI: unexpected output from Claude Code: ${text}`)
     if (/not logged in|\/login|authenticat/i.test(text)) {
@@ -415,6 +501,7 @@ function parseStreamLine(line: string): ClaudeCommandEvent[] {
   } catch {
     return []
   }
+  recordUsage(message)
 
   const events = new Array<ClaudeCommandEvent>()
   switch (message.type) {

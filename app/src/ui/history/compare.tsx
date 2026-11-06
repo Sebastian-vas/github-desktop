@@ -27,6 +27,7 @@ import { MergeCallToActionWithConflicts } from './merge-call-to-action-with-conf
 import { AheadBehindStore } from '../../lib/stores/ahead-behind-store'
 import { DragType } from '../../models/drag-drop'
 import { PopupType } from '../../models/popup'
+import { getAISettings } from '../../lib/ai/settings'
 import { getUniqueCoauthorsAsAuthors } from '../../lib/unique-coauthors-as-authors'
 import { getSquashedCommitDescription } from '../../lib/squash/squashed-commit-description'
 import { doMergeCommitsExistAfterCommit } from '../../lib/git'
@@ -158,6 +159,15 @@ export class CompareSidebar extends React.Component<
     })
   }
 
+  private onExplainCommit = (commit: Commit) => {
+    this.props.dispatcher.showPopup({
+      type: PopupType.ExplainCommit,
+      repository: this.props.repository,
+      sha: commit.sha,
+      summary: commit.summary,
+    })
+  }
+
   public render() {
     const { branches, filterText, showBranchList } = this.props.compareState
     const placeholderText = getPlaceholderText(this.props.compareState)
@@ -240,6 +250,9 @@ export class CompareSidebar extends React.Component<
     return (
       <CommitList
         ref={this.commitListRef}
+        onExplainCommit={
+          getAISettings().enabled ? this.onExplainCommit : undefined
+        }
         gitHubRepository={this.props.repository.gitHubRepository}
         isLocalRepository={this.props.isLocalRepository}
         commitLookup={this.props.commitLookup}

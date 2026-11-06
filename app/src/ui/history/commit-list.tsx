@@ -88,6 +88,9 @@ interface ICommitListProps {
   /** Callback to fire to open a given commit on GitHub */
   readonly onViewCommitOnGitHub?: (sha: string) => void
 
+  /** Explain the commit with AI; hidden when undefined */
+  readonly onExplainCommit?: (commit: Commit) => void
+
   /** Callback to fire to cancel a keyboard reordering operation */
   readonly onCancelKeyboardReorder?: () => void
 
@@ -760,6 +763,17 @@ export class CommitList extends React.Component<
         enabled: this.canCherryPick(),
       },
       { type: 'separator' },
+      ...(this.props.onExplainCommit !== undefined
+        ? [
+            {
+              label: __DARWIN__
+                ? 'Explain Commit with AI'
+                : 'Explain commit with AI',
+              action: () => this.props.onExplainCommit?.(commit),
+            },
+            { type: 'separator' as const },
+          ]
+        : []),
       {
         label: 'Copy SHA',
         action: () => clipboard.writeText(commit.sha),

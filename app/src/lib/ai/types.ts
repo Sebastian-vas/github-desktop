@@ -210,3 +210,79 @@ export type ClaudeCommandEvent =
       readonly code: number | null
       readonly error: string | null
     }
+
+// ------------------------------------------------------------- AI tasks
+
+/** Smaller AI helpers that share one request channel */
+export type AITaskKind =
+  | 'branch-name'
+  | 'pull-request'
+  | 'release-notes'
+  | 'recovery'
+  | 'explain-commit'
+  | 'explain-ci'
+  | 'team-summary'
+
+export interface IAITaskRequest extends IAIRequestOptions {
+  readonly kind: AITaskKind
+  /** Everything the task needs, already gathered by the renderer */
+  readonly input: string
+}
+
+export interface IAIBranchName {
+  readonly name: string
+  readonly alternatives: ReadonlyArray<string>
+}
+
+export interface IAIPullRequest {
+  readonly title: string
+  readonly body: string
+}
+
+export interface IAIReleaseNotes {
+  readonly title: string
+  readonly notes: string
+}
+
+export interface IAIRecoveryStep {
+  readonly title: string
+  readonly explanation: string
+  /** A git command to run, or null for a manual step */
+  readonly command: string | null
+  /** True when the command can't lose any work */
+  readonly safe: boolean
+}
+
+export interface IAIRecovery {
+  readonly diagnosis: string
+  readonly steps: ReadonlyArray<IAIRecoveryStep>
+}
+
+/** Explanations: a commit, a CI failure, what the team did */
+export interface IAIExplanation {
+  readonly summary: string
+  readonly details: string
+}
+
+// ----------------------------------------------------------- plan usage
+
+export interface IClaudeUsageWindow {
+  /** 0 to 1 */
+  readonly utilization: number
+  /** Unix time (seconds) when the window resets, or null */
+  readonly resetsAt: number | null
+  readonly status: string
+}
+
+export interface IClaudeUsage {
+  readonly fiveHour: IClaudeUsageWindow | null
+  readonly sevenDay: IClaudeUsageWindow | null
+  /** When it was read (ms since epoch) */
+  readonly updatedAt: number
+}
+
+// ------------------------------------------------------- shell commands
+
+export type ShellCommandEvent =
+  | { readonly kind: 'output'; readonly text: string }
+  | { readonly kind: 'exit'; readonly code: number | null }

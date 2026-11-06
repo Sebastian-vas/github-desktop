@@ -416,6 +416,18 @@ export interface IAPIWorkflowJobs {
 }
 
 // NB. Only partially mapped
+/** The fields of a workflow run used to explain failures */
+export interface IAPIWorkflowRunSummary {
+  readonly id: number
+  readonly name: string
+  readonly status: string
+  readonly conclusion: string | null
+  readonly html_url: string
+  readonly head_sha: string
+  readonly created_at: string
+  readonly display_title?: string
+}
+
 export interface IAPIWorkflowJob {
   readonly id: number
   readonly name: string
@@ -1446,6 +1458,84 @@ export class API {
       )
     }
     return null
+  }
+
+  /**
+   * The latest workflow runs of a branch (any event), newest first.
+   */
+  public async fetchWorkflowRunsForBranch(
+    owner: string,
+    name: string,
+    branchName: string
+  ): Promise<ReadonlyArray<IAPIWorkflowRunSummary>> {
+    const path = `repos/${owner}/${name}/actions/runs?per_page=15&branch=${encodeURIComponent(
+      branchName
+    )}`
+    try {
+      const response = await this.request('GET', path)
+      const runs = await parsedResponse<{
+        workflow_runs: ReadonlyArray<IAPIWorkflowRunSummary>
+      }>(response)
+      return runs.workflow_runs
+    } catch (err) {
+      log.debug(`Failed fetching workflow runs for ${branchName}`, err)
+      return []
+    }
+  }
+
+  /** The plain text log of a workflow job, or null */
+  public async fetchJobLogs(
+    owner: string,
+    name: string,
+    jobId: number
+  ): Promise<string | null> {
+    const path = `repos/${owner}/${name}/actions/jobs/${jobId}/logs`
+    try {
+      const response = await this.request('GET', path)
+      return response.ok ? await response.text() : null
+    } catch (err) {
+      log.debug(`Failed fetching the logs of job ${jobId}`, err)
+      return null
+    }
+  }
+
+  /** Opens a pull request, returning its URL */
+  public async createPullRequest(
+    owner: string,
+    name: string,
+    pullRequest: {
+      readonly title: string
+      readonly body: string
+      readonly head: string
+      readonly base: string
+      readonly draft: boolean
+    }
+  ): Promise<string> {
+    const response = await this.request(
+      'POST',
+      `repos/${owner}/${name}/pulls`,
+      {
+        body: pullRequest,
+      }
+    )
+    if (!response.ok) {
+      let message = `${response.status} ${response.statusText}`
+      try {
+        const json = await response.json()
+        const details = Array.isArray(json.errors)
+          ? json.errors
+              .map((e: { message?: string }) => e.message)
+              .filter(Boolean)
+              .join('; ')
+          : ''
+        message = [json.message, details].filter(Boolean).join(': ')
+      } catch {
+        // keep the status
+      }
+      throw new Error(message)
+    }
+    const created = await response.json()
+    return created.html_url
   }
 
   /**

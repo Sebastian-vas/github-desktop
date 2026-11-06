@@ -57,6 +57,7 @@ import { formatCommitMessage } from '../../lib/format-commit-message'
 import { useRepoRulesLogic } from '../../lib/helpers/repo-rules'
 import { WorkingDirectoryFileChange } from '../../models/status'
 import { generateAICommitMessage, getAISettings } from '../../lib/ai'
+import { isHotfixBranch } from '../git-flows/hotfix-dialog'
 
 const addAuthorIcon: OcticonSymbolVariant = {
   w: 18,
@@ -1413,6 +1414,10 @@ export class CommitMessage extends React.Component<
       return this.renderReleaseButton()
     }
 
+    if (isHotfixBranch(branch) && this.props.productionBranchName) {
+      return this.renderHotfixButton()
+    }
+
     const needsSummary =
       this.props.anyFilesSelected && isEmptyOrWhitespace(this.state.summary)
     const disabled =
@@ -1435,6 +1440,63 @@ export class CommitMessage extends React.Component<
         {`Commit, merge into ${mainBranchName} & push`}
       </Button>
     )
+  }
+
+  /** On a hotfix branch, the flow button publishes the hotfix */
+  private renderHotfixButton() {
+    const { isCommitting, anyFilesSelected, productionBranchName } = this.props
+    const needsSummary =
+      anyFilesSelected && isEmptyOrWhitespace(this.state.summary)
+    const disabled =
+      isCommitting === true ||
+      needsSummary ||
+      (anyFilesSelected && this.hasRepoRuleFailure())
+
+    return (
+      <Button
+        className="commit-merge-main-button hotfix-button"
+        onClick={this.onPublishHotfix}
+        disabled={disabled}
+        tooltip={
+          needsSummary
+            ? 'Write a commit summary first'
+            : `Publish the hotfix to ${productionBranchName} and bring it back to ${this.props.mainBranchName}`
+        }
+      >
+        <Octicon symbol={octicons.flame} />
+        {anyFilesSelected ? 'Commit & publish hotfix' : 'Publish hotfix'}
+      </Button>
+    )
+  }
+
+  private onPublishHotfix = () => {
+    const {
+      mainBranchName,
+      productionBranchName,
+      branch,
+      repository,
+      anyFilesSelected,
+    } = this.props
+    if (!mainBranchName || !productionBranchName || branch === null) {
+      return
+    }
+    this.props.onShowPopup({
+      type: PopupType.Hotfix,
+      repository,
+      branch,
+      mainBranch: mainBranchName,
+      productionBranch: productionBranchName,
+      commitContext: anyFilesSelected
+        ? {
+            summary: this.state.summary.trim(),
+            description: this.state.description,
+            trailers: this.getCoAuthorTrailers(),
+            amend: false,
+          }
+        : null,
+      filesToCommitCount: this.props.filesToCommit?.length ?? 0,
+      onCommitCreated: this.onCommitMergeMainCommitCreated,
+    })
   }
 
   /** On the main branch, the flow button releases to production instead */

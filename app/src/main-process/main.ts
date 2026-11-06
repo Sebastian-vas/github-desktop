@@ -59,13 +59,17 @@ import {
   generateCommitMessageWithAI,
   resolveConflictWithAI,
   reviewChangesWithAI,
+  runAITask,
 } from './ai'
 import {
   getClaudeAccountStatus,
   loginToClaudeAccount,
   startClaudeCommand,
   stopClaudeCommand,
+  getClaudeUsage,
+  refreshClaudeUsage,
 } from './claude-code'
+import { startShellCommand, stopShellCommand } from './shell-runner'
 
 app.setAppLogsPath()
 enableSourceMaps()
@@ -568,6 +572,15 @@ app.on('ready', () => {
   )
 
   ipcMain.on('claude-command-stop', (_, runId) => stopClaudeCommand(runId))
+
+  ipcMain.handle('ai-task', async (_, request) => runAITask(request))
+  ipcMain.handle('ai-usage-get', async () => getClaudeUsage())
+  ipcMain.handle('ai-usage-refresh', async () => refreshClaudeUsage())
+
+  ipcMain.handle('shell-command-start', async (event, runId, cwd, command) =>
+    startShellCommand(runId, cwd, command, event.sender)
+  )
+  ipcMain.on('shell-command-stop', (_, runId) => stopShellCommand(runId))
 
   ipcMain.handle('ai-generate-commit-message', async (_, request) =>
     generateCommitMessageWithAI(request)

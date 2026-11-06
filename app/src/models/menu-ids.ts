@@ -44,3 +44,8 @@ export type MenuIDs =
   | 'flows-release-production'
   | 'flows-ai-review'
   | 'flows-repo-commands'
+  | 'flows-team-overview'
+  | 'flows-hotfix'
+  | 'flows-pull-request'
+  | 'flows-recovery'
+  | 'flows-explain-ci'

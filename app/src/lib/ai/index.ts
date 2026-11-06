@@ -629,6 +629,56 @@ export async function reviewAIChanges(
     }
   }
 
+  return reviewDiff(repository, diff, branch, files.length)
+}
+
+/**
+ * Reviews what a range of commits changes (e.g. what a release is about to
+ * publish: "origin/prod..main").
+ */
+export async function reviewAIRange(
+  repository: Repository,
+  base: string,
+  head: string
+): Promise<AIResult<IAIReviewResult>> {
+  let diff: string
+  let fileCount: number
+  try {
+    const range = `${base}...${head}`
+    diff = (
+      await git(
+        ['diff', '--no-color', '--no-ext-diff', '--find-renames', range],
+        repository.path,
+        'ai-reviewRange'
+      )
+    ).stdout
+    fileCount = (
+      await git(
+        ['diff', '--name-only', range],
+        repository.path,
+        'ai-reviewRange'
+      )
+    ).stdout
+      .split('\n')
+      .filter(l => l.length > 0).length
+  } catch (e) {
+    return { kind: 'error', message: `Could not compute the diff: ${e}` }
+  }
+  if (diff.trim().length === 0) {
+    return {
+      kind: 'error',
+      message: `There are no changes between ${base} and ${head} to review.`,
+    }
+  }
+  return reviewDiff(repository, diff, head, fileCount)
+}
+
+async function reviewDiff(
+  repository: Repository,
+  diff: string,
+  branch: string | null,
+  fileCount: number
+): Promise<AIResult<IAIReviewResult>> {
   const context = getAISettings().useProjectContext
     ? await readReviewContext(repository, ReviewProjectContextLength)
     : { sources: [], text: '' }
@@ -649,7 +699,7 @@ export async function reviewAIChanges(
     value: {
       review: result.value,
       sources: context.sources,
-      fileCount: files.length,
+      fileCount,
     },
   }
 }

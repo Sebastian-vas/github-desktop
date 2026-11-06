@@ -102,6 +102,12 @@ export enum PopupType {
   SafePull = 'SafePull',
   AIReview = 'AIReview',
   RepoCommands = 'RepoCommands',
+  TeamOverview = 'TeamOverview',
+  Hotfix = 'Hotfix',
+  PullRequestAI = 'PullRequestAI',
+  Recovery = 'Recovery',
+  ExplainCommit = 'ExplainCommit',
+  ExplainCI = 'ExplainCI',
 }
 
 interface IBasePopup {
@@ -463,6 +469,47 @@ export type PopupDetail =
       repository: Repository
       files: ReadonlyArray<WorkingDirectoryFileChange>
       branch: string | null
+      range?: { readonly base: string; readonly head: string }
+    }
+  | {
+      type: PopupType.TeamOverview
+      repository: Repository
+      branch: string | null
+      mainBranch: string
+      productionBranch: string | null
+      initialTab?: number
+    }
+  | {
+      type: PopupType.Hotfix
+      repository: Repository
+      branch: string
+      mainBranch: string
+      productionBranch: string
+      commitContext: ICommitContext | null
+      filesToCommitCount: number
+      onCommitCreated?: () => void
+    }
+  | {
+      type: PopupType.PullRequestAI
+      repository: Repository
+      branch: string
+      mainBranch: string
+      baseCandidates: ReadonlyArray<string>
+    }
+  | {
+      type: PopupType.Recovery
+      repository: Repository
+    }
+  | {
+      type: PopupType.ExplainCommit
+      repository: Repository
+      sha: string
+      summary: string
+    }
+  | {
+      type: PopupType.ExplainCI
+      repository: Repository
+      branch: string
     }
   | {
       type: PopupType.RepoCommands

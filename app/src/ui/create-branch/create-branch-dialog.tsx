@@ -27,6 +27,12 @@ import { OkCancelButtonGroup } from '../dialog/ok-cancel-button-group'
 import { startTimer } from '../lib/timing'
 import { GitHubRepository } from '../../models/github-repository'
 import { RefNameTextBox } from '../lib/ref-name-text-box'
+import { Button } from '../lib/button'
+import { Loading } from '../lib/loading'
+import { Octicon } from '../octicons'
+import * as octicons from '../octicons/octicons.generated'
+import { getAISettings } from '../../lib/ai/settings'
+import { suggestBranchName } from '../../lib/ai/tasks'
 import { CommitOneLine } from '../../models/commit'
 import { PopupType } from '../../models/popup'
 import { RepositorySettingsTab } from '../repository-settings/repository-settings'
@@ -74,6 +80,12 @@ interface ICreateBranchProps {
 }
 
 interface ICreateBranchState {
+  /** The name field is re-created with this value after an AI suggestion */
+  readonly nameFieldValue: string | undefined
+  readonly nameFieldKey: number
+  readonly aiSuggesting: boolean
+  readonly aiAlternatives: ReadonlyArray<string>
+  readonly aiError: string | null
   readonly currentError: { error: Error; isWarning: boolean } | null
   readonly branchName: string
   readonly startPoint: StartPoint
@@ -108,6 +120,22 @@ interface ICreateBranchState {
 }
 
 /** The Create Branch component. */
+interface IBranchNameChipProps {
+  readonly name: string
+  readonly onPick: (name: string) => void
+}
+
+class BranchNameChip extends React.Component<IBranchNameChipProps> {
+  private onClick = () => this.props.onPick(this.props.name)
+  public render() {
+    return (
+      <button type="button" className="branch-name-chip" onClick={this.onClick}>
+        {this.props.name}
+      </button>
+    )
+  }
+}
+
 export class CreateBranch extends React.Component<
   ICreateBranchProps,
   ICreateBranchState
@@ -122,6 +150,11 @@ export class CreateBranch extends React.Component<
     const startPoint = getStartPoint(props, StartPoint.UpstreamDefaultBranch)
 
     this.state = {
+      nameFieldValue: props.initialName,
+      nameFieldKey: 0,
+      aiSuggesting: false,
+      aiAlternatives: [],
+      aiError: null,
       currentError: null,
       branchName: props.initialName,
       startPoint,
@@ -270,11 +303,14 @@ export class CreateBranch extends React.Component<
       >
         <DialogContent>
           <RefNameTextBox
+            key={this.state.nameFieldKey}
             label="Name"
             ariaDescribedBy={hasError ? this.ERRORS_ID : undefined}
-            initialValue={this.props.initialName}
+            initialValue={this.state.nameFieldValue}
             onValueChange={this.onBranchNameChange}
           />
+
+          {this.renderAISuggestion()}
 
           {this.renderBranchNameErrors()}
 
@@ -310,6 +346,64 @@ export class CreateBranch extends React.Component<
     }
 
     return __DARWIN__ ? 'Create Branch' : 'Create branch'
+  }
+
+  private renderAISuggestion() {
+    if (!getAISettings().enabled) {
+      return null
+    }
+    const { aiSuggesting, aiAlternatives, aiError, branchName } = this.state
+    return (
+      <div className="branch-name-ai">
+        <Button
+          className="small-button ai-button"
+          onClick={this.onSuggestName}
+          disabled={aiSuggesting || branchName.trim() === ''}
+          tooltip="Type what you're going to do (in any words) and let AI turn it into a branch name that follows the repository's conventions"
+        >
+          {aiSuggesting ? (
+            <Loading />
+          ) : (
+            <Octicon symbol={octicons.sparkleFill} />
+          )}
+          {aiSuggesting ? 'Thinking…' : 'Name it with AI'}
+        </Button>
+        {aiAlternatives.map(name => (
+          <BranchNameChip key={name} name={name} onPick={this.onPickName} />
+        ))}
+        {aiError !== null && (
+          <span className="branch-name-ai-error">{aiError}</span>
+        )}
+      </div>
+    )
+  }
+
+  private onSuggestName = async () => {
+    const description = this.state.branchName.replace(/[-_/]+/g, ' ').trim()
+    if (description.length === 0) {
+      return
+    }
+    this.setState({ aiSuggesting: true, aiError: null })
+    const result = await suggestBranchName(this.props.repository, description)
+    if (result.kind === 'error') {
+      this.setState({ aiSuggesting: false, aiError: result.message })
+      return
+    }
+    this.setState(state => ({
+      aiSuggesting: false,
+      aiAlternatives: result.value.alternatives.slice(0, 3),
+      nameFieldValue: result.value.name,
+      nameFieldKey: state.nameFieldKey + 1,
+    }))
+    this.updateBranchName(result.value.name)
+  }
+
+  private onPickName = (name: string) => {
+    this.setState(state => ({
+      nameFieldValue: name,
+      nameFieldKey: state.nameFieldKey + 1,
+    }))
+    this.updateBranchName(name)
   }
 
   private onBranchNameChange = (name: string) => {

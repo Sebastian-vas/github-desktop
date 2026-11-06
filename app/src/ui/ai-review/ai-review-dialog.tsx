@@ -13,12 +13,15 @@ import {
   IAIReviewFinding,
   IAIReviewResult,
   reviewAIChanges,
+  reviewAIRange,
 } from '../../lib/ai'
 
 interface IAIReviewDialogProps {
   readonly repository: Repository
   readonly files: ReadonlyArray<WorkingDirectoryFileChange>
   readonly branch: string | null
+  /** Review a range of commits instead of the files (e.g. a release) */
+  readonly range?: { readonly base: string; readonly head: string }
   readonly resolvedExternalEditor: string | null
   readonly openFileInExternalEditor: (fullPath: string) => void
   readonly onDismissed: () => void
@@ -144,11 +147,15 @@ export class AIReviewDialog extends React.Component<
       1000
     )
 
-    const result = await reviewAIChanges(
-      this.props.repository,
-      this.props.files,
-      this.props.branch
-    )
+    const { range } = this.props
+    const result =
+      range !== undefined
+        ? await reviewAIRange(this.props.repository, range.base, range.head)
+        : await reviewAIChanges(
+            this.props.repository,
+            this.props.files,
+            this.props.branch
+          )
     this.stopTimer()
     if (this.unmounted) {
       return
@@ -167,6 +174,26 @@ export class AIReviewDialog extends React.Component<
   }
 
   private renderLoading() {
+    const { range } = this.props
+    if (range !== undefined) {
+      return (
+        <div className="ai-review-loading">
+          <div className="ai-review-loading-icon">
+            <Octicon symbol={octicons.sparkleFill} />
+          </div>
+          <div className="ai-review-loading-text">
+            <strong>
+              Reviewing what goes from {range.head} to {range.base}…
+            </strong>
+            <span>
+              Checking for bugs, security problems and the project's rules ·{' '}
+              {this.state.elapsed}s
+            </span>
+          </div>
+          <Loading />
+        </div>
+      )
+    }
     const n = this.props.files.length
     return (
       <div className="ai-review-loading">

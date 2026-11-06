@@ -11,6 +11,7 @@ import { Button } from '../lib/button'
 import { LinkButton } from '../lib/link-button'
 import { PathText } from '../lib/path-text'
 import { CopyButton } from '../copy-button'
+import { ShellCommandRunner } from '../lib/shell-command-runner'
 import {
   GitFlowOutcome,
   IConflictSides,
@@ -47,6 +48,8 @@ export interface IGitFlowDialogProps {
   readonly resolvedExternalEditor: string | null
   readonly openFileInExternalEditor: (fullPath: string) => void
   readonly onDismissed: () => void
+  /** Extra content under the result, e.g. release notes */
+  readonly renderResultExtra?: (outcome: GitFlowOutcome) => JSX.Element | null
 }
 
 interface IStepState {
@@ -140,6 +143,8 @@ function noteIcon(note: IFlowNote) {
 /** A "what's next" card */
 export class FlowNoteCard extends React.Component<{
   readonly note: IFlowNote
+  /** Where its command runs; without it the command can only be copied */
+  readonly cwd?: string
 }> {
   public render() {
     const { note } = this.props
@@ -159,6 +164,9 @@ export class FlowNoteCard extends React.Component<{
                 ariaLabel={`Copy ${note.command}`}
               />
             </div>
+          )}
+          {note.command !== undefined && this.props.cwd !== undefined && (
+            <ShellCommandRunner cwd={this.props.cwd} command={note.command} />
           )}
         </div>
       </li>
@@ -633,7 +641,11 @@ export class GitFlowDialog extends React.Component<
             <h3 className="git-flow-section-title">What's next</h3>
             <ul className="flow-notes">
               {notes.map(note => (
-                <FlowNoteCard key={note.title} note={note} />
+                <FlowNoteCard
+                  key={note.title}
+                  note={note}
+                  cwd={this.props.repository.path}
+                />
               ))}
             </ul>
           </>
@@ -654,6 +666,8 @@ export class GitFlowDialog extends React.Component<
             </ul>
           </details>
         )}
+
+        {this.props.renderResultExtra?.(outcome)}
       </div>
     )
   }

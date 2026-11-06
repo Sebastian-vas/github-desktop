@@ -28,6 +28,9 @@ import {
   IClaudeAccountStatus,
   ClaudeCommandEvent,
   IClaudeCommandRequest,
+  IAITaskRequest,
+  IClaudeUsage,
+  ShellCommandEvent,
   IAIConflictResolutionRequest,
 } from './ai/types'
 
@@ -40,6 +43,8 @@ import {
 export type RequestChannels = {
   'claude-command-event': (runId: string, event: ClaudeCommandEvent) => void
   'claude-command-stop': (runId: string) => void
+  'shell-command-event': (runId: string, event: ShellCommandEvent) => void
+  'shell-command-stop': (runId: string) => void
   'select-all-window-contents': () => void
   'dialog-did-open': () => void
   'update-menu-state': (
@@ -161,6 +166,14 @@ export type RequestResponseChannels = {
     request: IAIReviewRequest
   ) => Promise<AIResult<IAIReview>>
   'ai-claude-account-status': () => Promise<IClaudeAccountStatus>
+  'ai-task': (request: IAITaskRequest) => Promise<AIResult<unknown>>
+  'ai-usage-get': () => Promise<IClaudeUsage | null>
+  'ai-usage-refresh': () => Promise<IClaudeUsage | null>
+  'shell-command-start': (
+    runId: string,
+    cwd: string,
+    command: string
+  ) => Promise<AIResult<null>>
   'claude-command-start': (
     request: IClaudeCommandRequest
   ) => Promise<AIResult<null>>
